@@ -11,25 +11,103 @@
   var FEEDBACK_LINE =
     'Punya keluhan atau saran pengembangan layanan? Silakan input melalui https://s.id/klinikHAP';
 
-  var MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus',
-    'September', 'Oktober', 'November', 'Desember'];
-  var DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+  var FEEDBACK_EN =
+    'Have a complaint or a suggestion to improve our services? Please submit it via https://s.id/klinikHAP';
+
+  var LANGS = ['id', 'en'];
+  function normLang(l) { return l === 'en' ? 'en' : 'id'; }
+
+  var MONTHS = {
+    id: ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus',
+      'September', 'Oktober', 'November', 'Desember'],
+    en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
+      'September', 'October', 'November', 'December']
+  };
+  var DAYS = {
+    id: ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'],
+    en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+  };
 
   var DEFAULT_SIGNATURE = {
     name: 'Eny Rohmatul Fitri', title: 'Perawat Perusahaan', company: 'PT Hexindo Adiperkasa Tbk'
   };
 
   var RECOMMENDATIONS = {
-    FIT: { label: 'Kembali Bekerja (Fit to Work)', short: 'Fit to Work' },
-    SICK: { label: 'Istirahat Sakit / Sick Leave', short: 'Istirahat Sakit' },
-    REFER: { label: 'Rujukan Lanjutan', short: 'Rujukan Lanjutan' }
+    id: {
+      FIT: { label: 'Kembali Bekerja (Fit to Work)', short: 'Fit to Work' },
+      SICK: { label: 'Istirahat Sakit / Sick Leave', short: 'Istirahat Sakit' },
+      REFER: { label: 'Rujukan Lanjutan', short: 'Rujukan Lanjutan' }
+    },
+    en: {
+      FIT: { label: 'Return to Work (Fit to Work)', short: 'Fit to Work' },
+      SICK: { label: 'Sick Leave', short: 'Sick Leave' },
+      REFER: { label: 'Referral to Further Care', short: 'Referral' }
+    }
+  };
+
+  /* Teks email per bahasa. Fungsi dipakai bila ada nilai yang disisipkan. */
+  var TXT = {
+    id: {
+      dear: 'Kepada Yth.', mr: 'Bapak/Ibu ', bossFallback: 'Atasan / HRD',
+      workerIntro: function (c) { return 'Terima kasih telah berkunjung ke ' + c + '. Berikut ringkasan kunjungan Anda:'; },
+      bossIntro: function (c) { return 'Berikut informasi kunjungan karyawan ke ' + c + ':'; },
+      name: 'Nama', nik: 'NIK', dept: 'Departemen',
+      visitDate: 'Tanggal kunjungan', inOut: 'Jam masuk - keluar', doctor: 'Dokter pemeriksa',
+      complaint: 'Keluhan / diagnosa', meds: 'Obat yang diresepkan', noMeds: 'Tidak ada obat yang diresepkan',
+      rec: 'Rekomendasi medis', bossRec: 'Status rekomendasi kerja', rest: 'Durasi istirahat', referTo: 'Tujuan rujukan',
+      workerSurat: function (no) {
+        return 'Surat Keterangan Sakit dengan No. ' + no + ' telah diserahkan langsung kepada Anda di klinik. ' +
+          'Mohon disimpan dan diserahkan kepada atasan/HRD sesuai ketentuan perusahaan.';
+      },
+      bossSurat: function (no) {
+        return 'Surat Keterangan Sakit dengan No. ' + no + ' telah diserahkan langsung kepada karyawan yang bersangkutan di klinik. ' +
+          'Mohon karyawan dapat menunjukkan surat tersebut sesuai ketentuan perusahaan.';
+      },
+      workerFit: 'Anda dinyatakan layak kembali bekerja. Bila keluhan muncul kembali atau memburuk, segera kembali ke klinik.',
+      workerSick: 'Mohon beristirahat sesuai anjuran dokter. Bila keluhan tidak membaik atau memburuk, segera kembali ke klinik.',
+      workerRefer: 'Mohon segera menindaklanjuti rujukan ke fasilitas kesehatan lanjutan dan membawa surat yang telah diberikan.',
+      bossFit: 'Karyawan dinyatakan layak kembali bekerja. Tidak ada surat keterangan sakit yang diterbitkan.',
+      bossRefer: 'Karyawan direkomendasikan menjalani pemeriksaan lanjutan di fasilitas kesehatan rujukan.',
+      privacy: 'Informasi ini hanya memuat status kerja. Rincian medis bersifat rahasia dan tidak disampaikan melalui email ini.',
+      workerSubject: function (c, d, no) { return 'Ringkasan Kunjungan ' + c + ' - ' + d + (no ? ' (No. ' + no + ')' : ''); },
+      bossSubject: function (n, nik, s) { return 'Informasi Kunjungan Klinik: ' + n + ' (' + nik + ') - ' + s; },
+      feedback: FEEDBACK_LINE,
+      days: function (n) { return n + ' hari'; }, to: ' s.d. '
+    },
+    en: {
+      dear: 'Dear', mr: '', bossFallback: 'Supervisor / HR',
+      workerIntro: function (c) { return 'Thank you for visiting ' + c + '. Here is a summary of your visit:'; },
+      bossIntro: function (c) { return 'Below is the visit information for the employee at ' + c + ':'; },
+      name: 'Name', nik: 'Employee ID (NIK)', dept: 'Department',
+      visitDate: 'Date of visit', inOut: 'Time in - out', doctor: 'Examining doctor',
+      complaint: 'Complaint / diagnosis', meds: 'Medication prescribed', noMeds: 'No medication prescribed',
+      rec: 'Medical recommendation', bossRec: 'Work status recommendation', rest: 'Rest duration', referTo: 'Referral to',
+      workerSurat: function (no) {
+        return 'A sick leave certificate (No. ' + no + ') has been handed to you in person at the clinic. ' +
+          'Please keep it and submit it to your supervisor/HR according to company policy.';
+      },
+      bossSurat: function (no) {
+        return 'A sick leave certificate (No. ' + no + ') has been handed to the employee in person at the clinic. ' +
+          'Please ask the employee to present it according to company policy.';
+      },
+      workerFit: 'You have been declared fit to return to work. If your symptoms return or get worse, please come back to the clinic right away.',
+      workerSick: "Please rest as advised by the doctor. If your symptoms do not improve or get worse, please come back to the clinic right away.",
+      workerRefer: 'Please follow up on your referral to the further healthcare facility promptly and bring the letter you were given.',
+      bossFit: 'The employee has been declared fit to return to work. No sick leave certificate was issued.',
+      bossRefer: 'The employee is recommended to undergo further examination at a referral healthcare facility.',
+      privacy: 'This message only covers work status. Medical details are confidential and are not shared by email.',
+      workerSubject: function (c, d, no) { return c + ' Visit Summary - ' + d + (no ? ' (No. ' + no + ')' : ''); },
+      bossSubject: function (n, nik, s) { return 'Clinic Visit Notice: ' + n + ' (' + nik + ') - ' + s; },
+      feedback: FEEDBACK_EN,
+      days: function (n) { return n + (n === 1 ? ' day' : ' days'); }, to: ' to '
+    }
   };
 
   /* ---------- tanggal & waktu ---------- */
   function pad(n) { return String(n).padStart(2, '0'); }
   function ymd(d) { return '' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()); }
-  function fmtDateShort(d) { return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear(); }
-  function fmtDate(d) { return DAYS[d.getDay()] + ', ' + fmtDateShort(d); }
+  function fmtDateShort(d, lang) { return d.getDate() + ' ' + MONTHS[normLang(lang)][d.getMonth()] + ' ' + d.getFullYear(); }
+  function fmtDate(d, lang) { return DAYS[normLang(lang)][d.getDay()] + ', ' + fmtDateShort(d, lang); }
   function fmtTime(d) { return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
 
   function parseYmd(s) {
@@ -47,10 +125,11 @@
     return { days: days, start: start, end: end };
   }
 
-  function restText(r) {
+  function restText(r, lang) {
     if (!r) return '';
-    var span = r.days === 1 ? fmtDateShort(r.start) : fmtDateShort(r.start) + ' s.d. ' + fmtDateShort(r.end);
-    return r.days + ' hari (' + span + ')';
+    var t = TXT[normLang(lang)];
+    var span = r.days === 1 ? fmtDateShort(r.start, lang) : fmtDateShort(r.start, lang) + t.to + fmtDateShort(r.end, lang);
+    return t.days(r.days) + ' (' + span + ')';
   }
 
   /* ---------- nomor surat ---------- */
@@ -88,12 +167,14 @@
   }
 
   /* ---------- pembuat email ---------- */
-  function buildEmails(v, settings) {
+  function buildEmails(v, settings, lang) {
     settings = settings || {};
+    lang = normLang(lang || settings.emailLang);
+    var t = TXT[lang];
     var clinic = settings.clinicName || 'Klinik HAP';
     var visitAt = new Date(v.visitAt);
     var outAt = v.checkOutAt ? new Date(v.checkOutAt) : null;
-    var rec = RECOMMENDATIONS[v.recommendation] || { label: '-', short: '-' };
+    var rec = RECOMMENDATIONS[lang][v.recommendation] || { label: '-', short: '-' };
     var range = restRange(v);
     var timeRange = fmtTime(visitAt) + (outAt ? ' - ' + fmtTime(outAt) : '');
     var signer = (v.nurse || settings.nurseName || DEFAULT_SIGNATURE.name);
@@ -105,90 +186,73 @@
 
     /* --- Email 1: pekerja --- */
     var w = [];
-    w.push('Kepada Yth.');
-    w.push('Bapak/Ibu ' + bareName(v.name));
-    w.push(v.dept);
+    w.push(lang === 'en' ? 'Dear ' + bareName(v.name) + ',' : t.dear);
+    if (lang === 'id') w.push(t.mr + bareName(v.name));
+    if (lang === 'id') w.push(v.dept);
     w.push('');
-    w.push('Terima kasih telah berkunjung ke ' + clinic + '. Berikut ringkasan kunjungan Anda:');
+    w.push(t.workerIntro(clinic));
     w.push('');
-    w.push('Tanggal kunjungan: ' + fmtDate(visitAt));
-    w.push('Jam masuk - keluar: ' + timeRange);
-    w.push('Dokter pemeriksa: ' + (v.doctor || '-'));
+    w.push(t.visitDate + ': ' + fmtDate(visitAt, lang));
+    w.push(t.inOut + ': ' + timeRange);
+    w.push(t.doctor + ': ' + (v.doctor || '-'));
     w.push('');
-    w.push(row('Keluhan / diagnosa', v.complaint));
-    w.push(list('Obat yang diresepkan', bullets(v.medications), 'Tidak ada obat yang diresepkan'));
+    w.push(row(t.complaint, v.complaint));
+    w.push(list(t.meds, bullets(v.medications), t.noMeds));
     w.push('');
-    w.push('Rekomendasi medis: ' + rec.label);
-    if (range) w.push('Durasi istirahat: ' + restText(range));
-    if (v.recommendation === 'REFER' && v.referralTo) w.push('Tujuan rujukan: ' + v.referralTo);
+    w.push(t.rec + ': ' + rec.label);
+    if (range) w.push(t.rest + ': ' + restText(range, lang));
+    if (v.recommendation === 'REFER' && v.referralTo) w.push(t.referTo + ': ' + v.referralTo);
     w.push('');
-    if (hasSurat) {
-      w.push('Surat Keterangan Sakit dengan No. ' + v.suratNo +
-        ' telah diserahkan langsung kepada Anda di klinik. Mohon disimpan dan ' +
-        'diserahkan kepada atasan/HRD sesuai ketentuan perusahaan.');
-      w.push('');
-    }
-    if (v.recommendation === 'FIT') {
-      w.push('Anda dinyatakan layak kembali bekerja. Bila keluhan muncul kembali atau memburuk, segera kembali ke klinik.');
-    } else if (v.recommendation === 'SICK') {
-      w.push('Mohon beristirahat sesuai anjuran dokter. Bila keluhan tidak membaik atau memburuk, segera kembali ke klinik.');
-    } else if (v.recommendation === 'REFER') {
-      w.push('Mohon segera menindaklanjuti rujukan ke fasilitas kesehatan lanjutan dan membawa surat yang telah diberikan.');
-    }
+    if (hasSurat) { w.push(t.workerSurat(v.suratNo)); w.push(''); }
+    if (v.recommendation === 'FIT') w.push(t.workerFit);
+    else if (v.recommendation === 'SICK') w.push(t.workerSick);
+    else if (v.recommendation === 'REFER') w.push(t.workerRefer);
     w.push('');
     signature.forEach(function (l) { w.push(l); });
     w.push('');
     w.push('--');
-    w.push(FEEDBACK_LINE);
+    w.push(t.feedback);
 
     /* --- Email 2: atasan / HRD (tanpa diagnosis & obat) --- */
     var b = [];
-    b.push('Kepada Yth.');
-    b.push('Bapak/Ibu ' + (bareName(v.supervisorName) || 'Atasan / HRD'));
+    var bossName = bareName(v.supervisorName) || t.bossFallback;
+    if (lang === 'en') b.push('Dear ' + bossName + ',');
+    else { b.push(t.dear); b.push(t.mr + bossName); }
     b.push('');
-    b.push('Berikut informasi kunjungan karyawan ke ' + clinic + ':');
+    b.push(t.bossIntro(clinic));
     b.push('');
-    b.push('Nama: ' + v.name);
-    b.push('NIK: ' + v.nik);
-    b.push('Departemen: ' + v.dept);
+    b.push(t.name + ': ' + v.name);
+    b.push(t.nik + ': ' + v.nik);
+    b.push(t.dept + ': ' + v.dept);
     b.push('');
-    b.push('Tanggal kunjungan: ' + fmtDate(visitAt));
-    b.push('Jam masuk - keluar: ' + timeRange);
+    b.push(t.visitDate + ': ' + fmtDate(visitAt, lang));
+    b.push(t.inOut + ': ' + timeRange);
     b.push('');
-    b.push('Status rekomendasi kerja: ' + rec.label);
-    if (range) b.push('Durasi istirahat: ' + restText(range));
+    b.push(t.bossRec + ': ' + rec.label);
+    if (range) b.push(t.rest + ': ' + restText(range, lang));
     b.push('');
-    if (hasSurat) {
-      b.push('Surat Keterangan Sakit dengan No. ' + v.suratNo +
-        ' telah diserahkan langsung kepada karyawan yang bersangkutan di klinik. Mohon karyawan dapat menunjukkan surat tersebut sesuai ketentuan perusahaan.');
-      b.push('');
-    } else if (v.recommendation === 'FIT') {
-      b.push('Karyawan dinyatakan layak kembali bekerja. Tidak ada surat keterangan sakit yang diterbitkan.');
-      b.push('');
-    }
-    if (v.recommendation === 'REFER') {
-      b.push('Karyawan direkomendasikan menjalani pemeriksaan lanjutan di fasilitas kesehatan rujukan.');
-      b.push('');
-    }
-    b.push('Informasi ini hanya memuat status kerja. Rincian medis bersifat rahasia dan tidak disampaikan melalui email ini.');
+    if (hasSurat) { b.push(t.bossSurat(v.suratNo)); b.push(''); }
+    else if (v.recommendation === 'FIT') { b.push(t.bossFit); b.push(''); }
+    if (v.recommendation === 'REFER') { b.push(t.bossRefer); b.push(''); }
+    b.push(t.privacy);
     b.push('');
     signature.forEach(function (l) { b.push(l); });
     b.push('');
     b.push('--');
-    b.push(FEEDBACK_LINE);
+    b.push(t.feedback);
 
     var hrd = splitEmails(v.hrdEmail);
     return {
       worker: {
         to: v.workerEmail || '',
         cc: cc.join(', '),
-        subject: 'Ringkasan Kunjungan ' + clinic + ' - ' + fmtDateShort(visitAt) + (hasSurat ? ' (No. ' + v.suratNo + ')' : ''),
+        subject: t.workerSubject(clinic, fmtDateShort(visitAt, lang), hasSurat ? v.suratNo : ''),
         body: w.join('\n')
       },
       boss: {
         to: v.supervisorEmail || '',
         cc: hrd.concat(cc).join(', '),
-        subject: 'Informasi Kunjungan Klinik: ' + v.name + ' (' + v.nik + ') - ' + rec.short,
+        subject: t.bossSubject(v.name, v.nik, rec.short),
         body: b.join('\n')
       }
     };
@@ -312,7 +376,7 @@
   }
 
   return {
-    FEEDBACK_LINE: FEEDBACK_LINE, DEFAULT_SIGNATURE: DEFAULT_SIGNATURE,
+    FEEDBACK_LINE: FEEDBACK_LINE, FEEDBACK_EN: FEEDBACK_EN, LANGS: LANGS, normLang: normLang, DEFAULT_SIGNATURE: DEFAULT_SIGNATURE,
     RECOMMENDATIONS: RECOMMENDATIONS,
     pad: pad, ymd: ymd, fmtDate: fmtDate, fmtDateShort: fmtDateShort, fmtTime: fmtTime,
     parseYmd: parseYmd, restRange: restRange, restText: restText,

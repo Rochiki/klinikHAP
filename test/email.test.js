@@ -214,3 +214,55 @@ test('sapaan tidak menggandakan gelar di depan nama', () => {
   assert.match(m.boss.body, /^Kepada Yth\.\nBapak\/Ibu Budi\n/);
   assert.match(E.buildEmails(visit({ supervisorName: 'Budiman' }), settings).boss.body, /Bapak\/Ibu Budiman\n/); // 'Bu' bukan awalan kata
 });
+
+/* ---------- dwibahasa ---------- */
+const { test: t2 } = require('node:test');
+const assert2 = require('node:assert/strict');
+const E2 = require('../js/email.js');
+
+const visitEn = {
+  name: 'Pak Budi Santoso', nik: '0012345', dept: 'QSHE', doctor: 'dr Indah',
+  complaint: 'ISPA', medications: '- Bodrex', recommendation: 'SICK', restDays: 3,
+  suratNo: 'SK/KLL/20261118/001', visitAt: new Date(2026, 10, 18, 10, 12).toISOString(),
+  checkOutAt: new Date(2026, 10, 18, 10, 40).toISOString(), supervisorName: 'Bu Sari'
+};
+
+t2('bahasa default tetap Indonesia', () => {
+  const m = E2.buildEmails(visitEn, {});
+  assert2.match(m.worker.body, /^Kepada Yth\./);
+  assert2.match(m.worker.subject, /^Ringkasan Kunjungan/);
+});
+
+t2('versi English: sapaan, label, tanggal, surat, footer', () => {
+  const m = E2.buildEmails(visitEn, {}, 'en');
+  assert2.match(m.worker.body, /^Dear Budi Santoso,/);
+  assert2.match(m.worker.body, /Date of visit: Wednesday, 18 November 2026/);
+  assert2.match(m.worker.body, /Rest duration: 3 days \(18 November 2026 to 20 November 2026\)/);
+  assert2.match(m.worker.body, /sick leave certificate \(No\. SK\/KLL\/20261118\/001\)/);
+  assert2.match(m.worker.subject, /Visit Summary/);
+  assert2.match(m.boss.body, /^Dear Sari,/);
+  assert2.ok(m.worker.body.endsWith(E2.FEEDBACK_EN));
+  assert2.ok(m.boss.body.endsWith(E2.FEEDBACK_EN));
+  assert2.doesNotMatch(m.worker.body + m.boss.body, /Kepada|Keluhan|hari/);
+});
+
+t2('versi English email atasan tetap tanpa diagnosis dan obat', () => {
+  const m = E2.buildEmails(visitEn, {}, 'en');
+  assert2.doesNotMatch(m.boss.body, /ISPA|Bodrex/);
+  assert2.match(m.boss.body, /Employee ID \(NIK\): 0012345/);
+});
+
+t2('English: Fit to Work tanpa surat; pengaturan emailLang dipakai; bahasa tak dikenal jatuh ke id', () => {
+  const fit = Object.assign({}, visitEn, { recommendation: 'FIT', restDays: '', suratNo: '' });
+  const m = E2.buildEmails(fit, { emailLang: 'en' });
+  assert2.doesNotMatch(m.worker.body, /certificate \(No/);
+  assert2.match(m.boss.body, /No sick leave certificate was issued/);
+  assert2.match(E2.buildEmails(visitEn, {}, 'fr').worker.body, /^Kepada Yth\./);
+});
+
+t2('English: HTML tetap berupa tabel rincian dan link aktif', () => {
+  const html = E2.toHtml(E2.buildEmails(visitEn, {}, 'en').worker.body);
+  assert2.match(html, /<table/);
+  assert2.match(html, /Date of visit/);
+  assert2.match(html, /<a href="https:\/\/s\.id\/klinikHAP"/);
+});

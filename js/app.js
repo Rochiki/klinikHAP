@@ -270,7 +270,9 @@
   /* ---------- dialog email ---------- */
   function openEmailDialog(visit, fromSubmit) {
     state.current = visit; state.fromSubmit = fromSubmit;
-    var mails = E.buildEmails(visit, S.getSettings());
+    var lang = E.normLang(S.getSettings().emailLang);
+    var mails = E.buildEmails(visit, S.getSettings(), lang);
+    setLangUi(lang);
     var grid = $('#emailGrid'); grid.textContent = '';
     ROLES.forEach(function (r) {
       var card = $('#tplEmailCard').content.firstElementChild.cloneNode(true);
@@ -279,6 +281,7 @@
       ['to', 'cc', 'subject', 'body'].forEach(function (f) {
         var input = $('[data-f="' + f + '"]', card);
         input.value = mails[r.key][f];
+        if (f === 'subject' || f === 'body') input.dataset.gen = mails[r.key][f]; // untuk deteksi suntingan manual
         var id = 'em-' + r.key + '-' + f;
         input.id = id;
         input.closest('.field').querySelector('label').setAttribute('for', id);
@@ -304,6 +307,29 @@
     if (!dlg.open) dlg.showModal();
     $('#emailDialog .email-card .btn.primary').focus({ preventScroll: true });
     $('#emailDialog .dlg-body').scrollTop = 0;
+  }
+
+  function setLangUi(lang) {
+    $$('#langSeg [data-lang]').forEach(function (b) { b.setAttribute('aria-checked', b.dataset.lang === lang ? 'true' : 'false'); });
+  }
+  function switchLang(lang) {
+    lang = E.normLang(lang);
+    if (lang === E.normLang(S.getSettings().emailLang)) return;
+    var cards = $$('#emailGrid .email-card');
+    var edited = cards.some(function (c) {
+      return ['subject', 'body'].some(function (f) { var i = $('[data-f="' + f + '"]', c); return i.value !== i.dataset.gen; });
+    });
+    if (edited && !window.confirm('Isi email sudah Anda ubah. Ganti bahasa akan membuat ulang isi email dan menghapus perubahan tersebut. Lanjutkan?')) return;
+    S.saveSettings({ emailLang: lang });
+    var mails = E.buildEmails(state.current, S.getSettings(), lang);
+    cards.forEach(function (c) {
+      ['subject', 'body'].forEach(function (f) {
+        var i = $('[data-f="' + f + '"]', c);
+        i.value = mails[c.dataset.role][f]; i.dataset.gen = i.value;
+      });
+    });
+    setLangUi(lang);
+    toast(lang === 'en' ? 'Email diganti ke English.' : 'Email diganti ke Bahasa Indonesia.');
   }
 
   function updateCard(card) {
@@ -694,6 +720,10 @@
     });
 
     $('#emailGrid').addEventListener('click', onEmailAction);
+    $('#langSeg').addEventListener('click', function (ev) {
+      var b = ev.target.closest('[data-lang]');
+      if (b && state.current) switchLang(b.dataset.lang);
+    });
     $$('dialog').forEach(function (d) {
       $$('[data-close]', d).forEach(function (b) { b.addEventListener('click', function () { d.close(); }); });
     });

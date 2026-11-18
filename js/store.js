@@ -19,6 +19,7 @@
     defaultDoctor: '',
     suratPrefix: 'SK/KLL',
     ccAlways: '',
+    emailLang: 'id',
     departments: ['HRGA', 'QSHE', 'Finance & Accounting', 'Procurement', 'Sales & Marketing',
       'Parts', 'Service', 'Warehouse & Logistics', 'IT', 'Legal', 'Operations']
   };

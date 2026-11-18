@@ -17,6 +17,7 @@ menyiapkan **dua email** (pekerja dan atasan/HRD) yang **dibuka dulu di Outlook*
 | **Simpan & Kirim Notifikasi** | Menyimpan ke riwayat lalu menampilkan 2 draf email yang bisa disunting |
 | Email 1 (Pekerja) | Ringkasan kunjungan, dokter, rekomendasi; untuk istirahat sakit, info Surat Keterangan Sakit telah diserahkan di klinik |
 | Email 2 (Atasan/HRD) | Nama, NIK, dept, jam masuk-keluar, status kerja, info surat. **Tanpa diagnosis, obat, maupun tujuan rujukan** |
+| Bahasa email | Di dialog email ada pilihan **Bahasa Indonesia / English**. Isi, subjek, tanggal, dan footer ikut berganti; pilihan diingat untuk kunjungan berikutnya. Mengganti bahasa membuat ulang isi email (ada konfirmasi bila isi sudah Anda ubah) |
 | Tanda tangan | `Best Regards, Eny Rohmatul Fitri, Perawat Perusahaan, PT Hexindo Adiperkasa Tbk` (dapat diubah di Pengaturan) |
 | Link hidup | Email dikirim berformat HTML (lewat **Outlook Classic langsung**, **.eml**, atau SMTP) sehingga `https://s.id/klinikHAP` dapat diklik. Tombol `mailto` hanya bisa teks polos |
 | Footer kedua email | `Punya keluhan atau saran pengembangan layanan? Silakan input melalui https://s.id/klinikHAP` |
