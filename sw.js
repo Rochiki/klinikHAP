@@ -1,6 +1,6 @@
 /* Klinik HAP - service worker: aplikasi tetap bisa dibuka tanpa internet.
  * Strategi: tampilkan dari cache lalu perbarui di latar belakang (versi baru terpakai pada pembukaan berikutnya). */
-var CACHE = 'klinikhap-v3';
+var CACHE = 'klinikhap-v4';
 var SHELL = ['./', 'index.html', 'manifest.webmanifest', 'css/style.css', 'img/logo.png', 'img/icon-192.png', 'img/icon-512.png',
   'js/vendor/qrcode.js', 'js/logo-data.js', 'js/email.js', 'js/master.js', 'js/sha256.js', 'js/pdf.js', 'js/surat.js', 'js/xlsx.js', 'js/recap.js', 'js/store.js', 'js/app.js'];
 

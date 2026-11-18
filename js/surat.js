@@ -1,6 +1,6 @@
 /*
  * Klinik HAP - Surat Keterangan Sakit (PDF) dengan kode QR dan kode verifikasi.
- * Surat TIDAK memuat diagnosis: salinan yang sama dikirim ke pekerja, atasan, dan HC.
+ * Surat memuat diagnosis (atas permintaan klinik); email atasan/HRD tetap tanpa diagnosis.
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
@@ -15,12 +15,12 @@
     id: {
       clinic: 'PELAYANAN KESEHATAN', title: 'SURAT KETERANGAN SAKIT', no: 'Nomor',
       intro: 'Berdasarkan hasil pemeriksaan dokter perusahaan, dengan ini diterangkan bahwa:',
-      name: 'Nama', nik: 'NIK', dept: 'Departemen', company: 'Perusahaan',
+      name: 'Nama', nik: 'NIK', dept: 'Departemen', company: 'Perusahaan', dx: 'Diagnosis',
       sick: function (n) { return ['Dalam keadaan ', 'SAKIT', ' dan memerlukan istirahat selama ' + n + ' hari.']; },
       from: 'Terhitung mulai tanggal', to: 'Sampai dengan tanggal',
       closing: 'Demikian surat keterangan ini dibuat untuk dapat dipergunakan sebagaimana mestinya.',
       auto: 'Dokumen ini diterbitkan secara otomatis oleh sistem berdasarkan konsultasi yang dilakukan dengan dokter perusahaan, sehingga tidak memerlukan tanda tangan basah.',
-      conf: 'Rincian medis bersifat rahasia dan tidak dicantumkan pada surat ini.',
+      conf: 'Dokumen ini memuat data kesehatan yang bersifat rahasia; mohon dijaga kerahasiaannya.',
       issuedBy: 'Diterbitkan atas konsultasi dengan', doctorRole: 'Dokter Perusahaan', sip: 'No. SIP',
       recorded: 'Dicatat oleh', code: 'Kode verifikasi', scan: 'Pindai kode QR untuk memeriksa keabsahan surat ini.',
       printed: 'Diterbitkan', place: 'Jakarta'
@@ -28,12 +28,12 @@
     en: {
       clinic: 'HEALTH SERVICES', title: 'SICK LEAVE CERTIFICATE', no: 'Number',
       intro: 'Based on the examination by the company doctor, this is to certify that:',
-      name: 'Name', nik: 'Employee ID (NIK)', dept: 'Department', company: 'Company',
+      name: 'Name', nik: 'Employee ID (NIK)', dept: 'Department', company: 'Company', dx: 'Diagnosis',
       sick: function (n) { return ['Is ', 'SICK', ' and requires rest for ' + n + (n === 1 ? ' day.' : ' days.')]; },
       from: 'Starting from', to: 'Until',
       closing: 'This certificate is issued to be used as appropriate.',
       auto: 'This document was issued automatically by the system based on a consultation with the company doctor, and therefore does not require a wet signature.',
-      conf: 'Medical details are confidential and are not stated in this certificate.',
+      conf: 'This document contains confidential health information; please handle it accordingly.',
       issuedBy: 'Issued following consultation with', doctorRole: 'Company Doctor', sip: 'Licence No. (SIP)',
       recorded: 'Recorded by', code: 'Verification code', scan: 'Scan the QR code to verify this certificate.',
       printed: 'Issued', place: 'Jakarta'
@@ -113,6 +113,7 @@
     d.text(L, y, t.intro, { size: 10.5 });
     y += 24;
     var rows = [[t.name, v.name], [t.nik, v.nik || '-'], [t.dept, v.dept || '-'], [t.company, settings.companyName || 'PT Hexindo Adiperkasa Tbk']];
+    if (v.diagnosis) rows.push([t.dx, v.diagnosis]);
     rows.forEach(function (r) {
       d.text(L + 18, y, r[0], { size: 10.5 }); d.text(L + 128, y, ':', { size: 10.5 });
       d.text(L + 140, y, r[1], { size: 10.5, bold: r[0] === t.name });

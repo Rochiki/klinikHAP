@@ -26,7 +26,7 @@ test('kode verifikasi stabil, berubah bila data/rahasia berubah', () => {
   assert.notEqual(c1, S.verifyCode(visit, 'lain'));
 });
 
-test('PDF surat: valid, memuat kop/nomor/dokter, TANPA diagnosis', () => {
+test('PDF surat: valid, memuat kop/nomor/dokter dan diagnosis', () => {
   const r = S.build(visit, settings, { lang: 'id' });
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sk-')), f = path.join(dir, 'a.pdf');
   fs.writeFileSync(f, r.bytes);
@@ -34,8 +34,8 @@ test('PDF surat: valid, memuat kop/nomor/dokter, TANPA diagnosis', () => {
   let txt = '';
   try { txt = execFileSync('pdftotext', ['-layout', f, '-'], { encoding: 'utf8' }); } catch (e) { return; } // pdftotext opsional
   for (const w of ['PELAYANAN KESEHATAN', 'SURAT KETERANGAN SAKIT', '007/SKS/QSHE-HAP/XI/2026', 'Budi Santoso', 'dr. Indah',
-    'Pulo Kambing', 'tanda tangan basah', r.code]) assert.ok(txt.includes(w), 'tidak memuat: ' + w);
-  assert.ok(!/Faringitis|batukX/.test(txt));
+    'Pulo Kambing', 'Diagnosis', 'Faringitis', 'tanda tangan basah', r.code]) assert.ok(txt.includes(w), 'tidak memuat: ' + w);
+  assert.ok(!/batukX/.test(txt)); // keluhan tidak ikut
   assert.equal(r.filename, 'Surat-Sakit-007-SKS-QSHE-HAP-XI-2026.pdf');
 });
 
