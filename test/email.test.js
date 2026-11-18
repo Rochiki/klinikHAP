@@ -8,7 +8,7 @@ const FOOTER = 'Punya keluhan atau saran pengembangan layanan? Silakan input mel
 
 function visit(over) {
   return Object.assign({
-    suratNo: 'SK/KLL/20261118/001',
+    suratNo: '007/SKS/QSHE-HAP/XI/2026',
     visitAt: new Date(2026, 10, 18, 9, 16).toISOString(),
     checkOutAt: new Date(2026, 10, 18, 9, 42).toISOString(),
     name: 'Budi Santoso', nik: '0012345', dept: 'Service',
@@ -22,10 +22,11 @@ function visit(over) {
 }
 const settings = { clinicName: 'Klinik HAP', nurseName: 'Ns. Default', ccAlways: 'arsip@contoh.co.id' };
 
-test('nomor surat mengikuti format SK/KLL/YYYYMMDD/XXX', () => {
-  assert.equal(E.buildSuratNo('SK/KLL', new Date(2026, 10, 18), 1), 'SK/KLL/20261118/001');
-  assert.equal(E.buildSuratNo('SK/KLL', new Date(2026, 0, 5), 42), 'SK/KLL/20260105/042');
-  assert.equal(E.buildSuratNo('SK/KLL', new Date(2026, 0, 5), 1234), 'SK/KLL/20260105/1234');
+test('nomor surat: urut/SKS/QSHE-HAP/bulan romawi/tahun', () => {
+  assert.equal(E.buildSuratNo('SKS/QSHE-HAP', new Date(2026, 10, 18), 1), '001/SKS/QSHE-HAP/XI/2026');
+  assert.equal(E.buildSuratNo('SKS/QSHE-HAP', new Date(2026, 0, 5), 42), '042/SKS/QSHE-HAP/I/2026');
+  assert.equal(E.buildSuratNo('SKS/QSHE-HAP', new Date(2026, 11, 5), 1234), '1234/SKS/QSHE-HAP/XII/2026');
+  assert.match(E.buildSuratNo('', new Date(2026, 3, 1), 7), /^007\/SKS\/QSHE-HAP\/IV\/2026$/);
 });
 
 test('kedua email diakhiri persis dengan teks umpan balik', () => {
@@ -46,7 +47,7 @@ test('email pekerja memuat ringkasan, dokter, status, no. surat', () => {
   assert.match(b, /- Vitamin C 1x1/);
   assert.match(b, /Istirahat Sakit \/ Sick Leave/);
   assert.match(b, /2 hari \(18 November 2026 s\.d\. 19 November 2026\)/);
-  assert.match(b, /Surat Keterangan Sakit dengan No\. SK\/KLL\/20261118\/001 telah diserahkan langsung kepada Anda di klinik/);
+  assert.match(b, /Surat Keterangan Sakit No\. 007\/SKS\/QSHE-HAP\/XI\/2026 terlampir pada email ini \(PDF\)/);
 });
 
 test('email atasan TIDAK membocorkan diagnosis, obat, atau tujuan rujukan', () => {
@@ -128,12 +129,12 @@ test('.eml: header benar, subjek non-ASCII ter-encode, isi dapat didekode kembal
 
 test('surat sakit HANYA untuk istirahat sakit: fit to work & rujukan tanpa surat/nomor', () => {
   const sick = E.buildEmails(visit(), settings);
-  assert.match(sick.boss.body, /Surat Keterangan Sakit dengan No\. SK\/KLL\/20261118\/001 telah diserahkan langsung kepada karyawan/);
-  assert.match(sick.worker.subject, /\(No\. SK\/KLL\/20261118\/001\)/);
+  assert.match(sick.boss.body, /Surat Keterangan Sakit No\. 007\/SKS\/QSHE-HAP\/XI\/2026 terlampir pada email ini/);
+  assert.match(sick.worker.subject, /\(No\. 007\/SKS\/QSHE-HAP\/XI\/2026\)/);
   for (const rec of ['FIT', 'REFER']) {
     const m = E.buildEmails(visit({ recommendation: rec, restDays: 0, suratNo: '' }), settings);
     for (const k of ['worker', 'boss']) {
-      assert.ok(!/Surat Keterangan|SK\/KLL|surat sakit diterbitkan/.test(m[k].body), rec + ' ' + k + ' memuat surat');
+      assert.ok(!/Surat Keterangan|SKS\/QSHE|surat sakit diterbitkan/.test(m[k].body), rec + ' ' + k + ' memuat surat');
       assert.ok(!/\(No\./.test(m[k].subject), rec + ' ' + k + ' subjek memuat nomor');
       assert.ok(m[k].body.endsWith(FOOTER));
     }
@@ -223,7 +224,7 @@ const E2 = require('../js/email.js');
 const visitEn = {
   name: 'Pak Budi Santoso', nik: '0012345', dept: 'QSHE', doctor: 'dr Indah',
   complaint: 'ISPA', medications: '- Bodrex', recommendation: 'SICK', restDays: 3,
-  suratNo: 'SK/KLL/20261118/001', visitAt: new Date(2026, 10, 18, 10, 12).toISOString(),
+  suratNo: '007/SKS/QSHE-HAP/XI/2026', visitAt: new Date(2026, 10, 18, 10, 12).toISOString(),
   checkOutAt: new Date(2026, 10, 18, 10, 40).toISOString(), supervisorName: 'Bu Sari'
 };
 
@@ -238,7 +239,7 @@ t2('versi English: sapaan, label, tanggal, surat, footer', () => {
   assert2.match(m.worker.body, /^Dear Budi Santoso,/);
   assert2.match(m.worker.body, /Date of visit: Wednesday, 18 November 2026/);
   assert2.match(m.worker.body, /Rest duration: 3 days \(18 November 2026 to 20 November 2026\)/);
-  assert2.match(m.worker.body, /sick leave certificate \(No\. SK\/KLL\/20261118\/001\)/);
+  assert2.match(m.worker.body, /sick leave certificate \(No\. 007\/SKS\/QSHE-HAP\/XI\/2026\)/);
   assert2.match(m.worker.subject, /Visit Summary/);
   assert2.match(m.boss.body, /^Dear Sari,/);
   assert2.ok(m.worker.body.endsWith(E2.FEEDBACK_EN));

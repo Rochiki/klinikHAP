@@ -60,6 +60,14 @@ const PS_SCRIPT = [
   "$m = $ol.CreateItem(0)",
   "$m.To = [string]$j.to; $m.CC = [string]$j.cc; $m.Subject = [string]$j.subject",
   "if ($j.html) { $m.HTMLBody = [string]$j.html } else { $m.Body = [string]$j.text }",
+  "if ($j.attachment) {",
+  "  $base = Join-Path ([IO.Path]::GetTempPath()) 'klinikhap-lampiran'",
+  "  if (Test-Path $base) { Get-ChildItem $base -Directory -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-1) } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue }",
+  "  $dir = Join-Path $base ([guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Path $dir -Force | Out-Null",
+  "  $f = Join-Path $dir ([IO.Path]::GetFileName([string]$j.attachment.name))",
+  "  [IO.File]::WriteAllBytes($f, [Convert]::FromBase64String([string]$j.attachment.base64))",
+  "  $null = $m.Attachments.Add($f)",
+  "}",
   "$m.Display()"
 ].join('\n');
 
@@ -113,6 +121,14 @@ function readBody(req) {
 
 function parseList(s) { return String(s || '').split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean); }
 
+/* Lampiran: satu berkas PDF kecil (surat keterangan sakit). */
+function validAttachment(a) {
+  if (!a || typeof a !== 'object') return false;
+  if (typeof a.name !== 'string' || !/^[A-Za-z0-9._-]{1,120}\.pdf$/i.test(a.name)) return false;
+  if (typeof a.base64 !== 'string' || a.base64.length > 550000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(a.base64)) return false;
+  return Buffer.from(a.base64.slice(0, 8), 'base64').toString('latin1').startsWith('%PDF');
+}
+
 function validateMail(b, opts) {
   const requireTo = !opts || opts.requireTo !== false;
   if (!b || typeof b !== 'object') return 'Permintaan tidak valid.';
@@ -128,6 +144,7 @@ function validateMail(b, opts) {
   if (typeof b.subject !== 'string' || !b.subject.trim() || b.subject.length > 300 || /[\r\n]/.test(b.subject)) return 'Subjek tidak valid.';
   if (typeof b.text !== 'string' || !b.text.trim() || b.text.length > 20000) return 'Isi email tidak valid.';
   if (b.html !== undefined && (typeof b.html !== 'string' || b.html.length > 80000)) return 'Isi HTML tidak valid.';
+  if (b.attachment !== undefined && b.attachment !== null && !validAttachment(b.attachment)) return 'Lampiran tidak valid (hanya PDF, maks. 400 KB).';
   return null;
 }
 
@@ -161,7 +178,7 @@ function createServer(mailer, opts) {
         if (problem) return sendJson(res, 400, { ok: false, error: problem });
         if (isOutlook) {
           try {
-            await opener({ to: parseList(body.to).join(';'), cc: parseList(body.cc).join(';'), subject: body.subject, text: body.text, html: body.html || '' });
+            await opener({ to: parseList(body.to).join(';'), cc: parseList(body.cc).join(';'), subject: body.subject, text: body.text, html: body.html || '', attachment: body.attachment || null });
             return sendJson(res, 200, { ok: true });
           } catch (e) {
             console.error('Gagal membuka Outlook:', e.message);
@@ -172,7 +189,8 @@ function createServer(mailer, opts) {
           const info = await mailer.transport.sendMail({
             from: process.env.MAIL_FROM || process.env.SMTP_USER || 'klinik@localhost',
             to: parseList(body.to), cc: parseList(body.cc).length ? parseList(body.cc) : undefined,
-            subject: body.subject, text: body.text, html: body.html || undefined
+            subject: body.subject, text: body.text, html: body.html || undefined,
+            attachments: body.attachment ? [{ filename: body.attachment.name, content: Buffer.from(body.attachment.base64, 'base64'), contentType: 'application/pdf' }] : undefined
           });
           if (mailer.mode === 'dry-run') console.log('[dry-run] email ke', body.to, '|', body.subject);
           return sendJson(res, 200, { ok: true, messageId: info.messageId || null });
@@ -188,7 +206,7 @@ function createServer(mailer, opts) {
       let rel;
       try { rel = decodeURIComponent(url.pathname); } catch (e) { rel = ''; }
       if (rel === '/') rel = '/index.html';
-      const allowed = rel === '/index.html' || /^\/(css|js|img)\/[^/]+$/.test(rel);
+      const allowed = rel === '/index.html' || /^\/(css|js|img)\/(?:vendor\/)?[^/]+$/.test(rel);
       const file = path.join(ROOT, rel);
       if (!allowed || !file.startsWith(ROOT + path.sep) || !MIME[path.extname(file).toLowerCase()]) {
         res.writeHead(404, SECURITY_HEADERS); return res.end('Tidak ditemukan');

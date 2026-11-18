@@ -36,7 +36,11 @@
           <fieldset class="card">
             <legend>1. Data Pekerja</legend>
             <div class="field">
-              <label for="f-nik">NIK <span class="req">*</span></label>
+              <label for="f-status">Status pasien</label>
+              <select id="f-status" name="status"></select>
+            </div>
+            <div class="field">
+              <label for="f-nik">NIK <span class="req" id="nikReq">*</span></label>
               <input id="f-nik" name="nik" type="text" inputmode="numeric" maxlength="30" required>
               <p class="field-hint" id="nikHint"></p>
               <p class="field-error" data-error-for="nik" role="alert"></p>
@@ -102,13 +106,31 @@
               <p class="field-error" data-error-for="doctor" role="alert"></p>
             </div>
             <div class="field">
-              <label for="f-complaint">Keluhan / Diagnosa <span class="req">*</span></label>
-              <textarea id="f-complaint" name="complaint" rows="3" maxlength="1500" required></textarea>
-              <p class="field-error" data-error-for="complaint" role="alert"></p>
+              <label for="f-diagnosis">Diagnosis <span class="req">*</span> <span class="opt">(pilih dari daftar atau ketik)</span></label>
+              <input id="f-diagnosis" name="diagnosis" type="text" list="dxList" maxlength="120" placeholder="mis. Faringitis akut">
+              <datalist id="dxList"></datalist>
+              <p class="field-hint" id="dxHint"></p>
+              <p class="field-error" data-error-for="diagnosis" role="alert"></p>
             </div>
             <div class="field">
-              <label for="f-medications">Obat yang Diresepkan <span class="opt">(satu obat per baris)</span></label>
-              <textarea id="f-medications" name="medications" rows="3" maxlength="1500" placeholder="Paracetamol 500 mg - 3x1 sesudah makan&#10;Vitamin C 500 mg - 1x1"></textarea>
+              <label for="f-complaint">Keluhan / catatan klinis <span class="opt">(opsional, ikut di email pekerja)</span></label>
+              <textarea id="f-complaint" name="complaint" rows="2" maxlength="1500" placeholder="mis. batuk 3 hari, demam"></textarea>
+            </div>
+            <div class="field">
+              <label>Obat yang diresepkan <span class="opt">(maks. 5; kolom kanan = jumlah)</span></label>
+              <datalist id="drugList"></datalist>
+              <div id="medRows" class="med-rows"></div>
+              <button type="button" class="btn ghost small" id="btnAddMed">+ Tambah obat</button>
+            </div>
+            <div class="row-2">
+              <div class="field">
+                <label for="f-workRelated">Dugaan terkait pekerjaan</label>
+                <select id="f-workRelated" name="workRelated"><option value="Tidak">Tidak</option><option value="Ya">Ya</option></select>
+              </div>
+              <div class="field">
+                <label for="f-note">Catatan <span class="opt">(opsional, hanya di rekap)</span></label>
+                <input id="f-note" name="note" type="text" maxlength="200">
+              </div>
             </div>
           </fieldset>
         </div>
@@ -183,6 +205,7 @@
           </select>
           <label class="inline">Dari <input id="hFrom" type="date"></label>
           <label class="inline">Sampai <input id="hTo" type="date"></label>
+          <button type="button" class="btn primary" id="btnExportXlsx">Unduh Rekap (.xlsx)</button>
           <button type="button" class="btn" id="btnExport">Unduh CSV</button>
         </div>
         <div class="table-wrap">
@@ -197,6 +220,16 @@
           </table>
         </div>
         <p class="empty" id="historyEmpty" hidden>Belum ada kunjungan yang cocok.</p>
+      </div>
+      <div class="card" id="verifyCard">
+        <h2>Verifikasi Surat Keterangan Sakit</h2>
+        <p class="muted small">Cocokkan nomor dan kode verifikasi pada surat (atau tempel isi QR) dengan catatan klinik di laptop ini.</p>
+        <div class="toolbar">
+          <input id="vNo" type="text" placeholder="Nomor surat, mis. 007/SKS/QSHE-HAP/XI/2026" aria-label="Nomor surat">
+          <input id="vCode" type="text" placeholder="Kode XXXX-XXXX" aria-label="Kode verifikasi" maxlength="9">
+          <button type="button" class="btn primary" id="btnVerify">Periksa</button>
+        </div>
+        <p id="vResult" class="verify-result" role="status"></p>
       </div>
     </section>
 
@@ -222,7 +255,7 @@
             <input id="s-companyName" name="companyName" type="text" maxlength="100">
           </div>
           <div class="field">
-            <label for="s-doctors">Daftar dokter pemeriksa <span class="opt">(satu per baris)</span></label>
+            <label for="s-doctors">Daftar dokter pemeriksa <span class="opt">(satu per baris; format: dr. Nama | No. SIP)</span></label>
             <textarea id="s-doctors" name="doctors" rows="3"></textarea>
           </div>
           <div class="field">
@@ -239,6 +272,31 @@
             <label for="s-ccAlways">CC otomatis <span class="opt">(opsional, mis. arsip klinik)</span></label>
             <input id="s-ccAlways" name="ccAlways" type="text" maxlength="200">
             <p class="field-error" data-error-for="ccAlways" role="alert"></p>
+          </div>
+          <div class="field">
+            <label for="s-periodStart">Awal periode rekap <span class="opt">(Bulan-ke 1)</span></label>
+            <input id="s-periodStart" name="periodStart" type="date">
+          </div>
+          <div class="field">
+            <label for="s-logo">Logo untuk surat sakit <span class="opt">(opsional; bawaan: logo Hexindo)</span></label>
+            <input id="s-logo" type="file" accept="image/png,image/jpeg">
+            <p class="field-hint"><span id="logoHint"></span> <button type="button" class="btn ghost small" id="btnLogoReset" hidden>Pakai logo bawaan</button></p>
+          </div>
+          <div class="field span-2">
+            <label for="s-address">Alamat kantor di surat sakit</label>
+            <input id="s-address" name="address" type="text" maxlength="200">
+          </div>
+          <div class="field">
+            <label for="s-phone">Telepon di surat sakit</label>
+            <input id="s-phone" name="phone" type="text" maxlength="60">
+          </div>
+          <div class="field">
+            <label for="s-verifyUrl">Alamat verifikasi surat <span class="opt">(opsional, isi QR)</span></label>
+            <input id="s-verifyUrl" name="verifyUrl" type="text" maxlength="200" placeholder="https://.../index.html">
+          </div>
+          <div class="field span-2">
+            <label for="s-hcNiks">NIK peserta Health Corner <span class="opt">(satu per baris; mengisi kolom Peserta HC di rekap)</span></label>
+            <textarea id="s-hcNiks" name="hcNiks" rows="3"></textarea>
           </div>
           <div class="field span-2">
             <label for="s-departments">Daftar departemen <span class="opt">(satu per baris)</span></label>
@@ -281,6 +339,17 @@
         <button type="button" role="radio" data-lang="en" aria-checked="false">English</button>
       </div>
     </div>
+    <div class="surat-bar" id="suratBar" hidden>
+      <div>
+        <strong>Surat Keterangan Sakit (PDF)</strong>
+        <span class="muted small" id="suratFile"></span>
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn small" data-surat="view">Lihat PDF</button>
+        <button type="button" class="btn small" data-surat="download">Unduh PDF</button>
+      </div>
+      <p class="muted small">PDF otomatis terlampir pada <em>Buka di Outlook Classic</em>, <em>Unduh .eml</em>, dan <em>Kirim Langsung</em>. Untuk tombol <em>mailto</em> dan <em>Outlook Web</em>, klik Unduh PDF lalu seret berkasnya ke email.</p>
+    </div>
     <div class="dlg-banner" id="emailBanner" hidden></div>
     <div class="dlg-body email-grid" id="emailGrid"></div>
     <details class="help">
@@ -294,7 +363,10 @@
     </details>
     <div class="dlg-foot">
       <p class="muted small" id="mailNote">Buka tiap email di Outlook, periksa, lalu tekan Kirim di Outlook.</p>
-      <button type="button" class="btn primary" data-close>Selesai</button>
+      <div class="btn-row">
+        <button type="button" class="btn primary" id="btnFinishOutlook" hidden>Selesai &amp; Buka Kedua Email di Outlook Classic</button>
+        <button type="button" class="btn primary" data-close id="btnDone">Selesai</button>
+      </div>
     </div>
   </dialog>
 
@@ -337,7 +409,15 @@
 
   <div id="toast" class="toast" popover="manual" role="status" aria-live="polite"></div>
 
+  <script src="js/vendor/qrcode.js"></script>
+  <script src="js/logo-data.js"></script>
   <script src="js/email.js"></script>
+  <script src="js/master.js"></script>
+  <script src="js/sha256.js"></script>
+  <script src="js/pdf.js"></script>
+  <script src="js/surat.js"></script>
+  <script src="js/xlsx.js"></script>
+  <script src="js/recap.js"></script>
   <script src="js/store.js"></script>
   <script src="js/app.js"></script>
 </body>

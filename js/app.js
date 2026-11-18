@@ -4,12 +4,13 @@
 
   var E = window.KlinikEmail;
   var S = window.KlinikStore;
+  var M = window.KlinikMaster, R = window.KlinikRecap, SU = window.KlinikSurat;
   var pad = E.pad;
 
   var state = {
     manualTime: false, pristine: true, saved: false,
     canSend: false, dryRun: false, canOutlook: false, serverChecked: false,
-    current: null, fromSubmit: false
+    current: null, fromSubmit: false, pdf: null, pdfPromise: null
   };
 
   var ROLES = [
@@ -84,6 +85,56 @@
     });
   }
   function copyQuiet(t) { copyText(t).catch(function () { /* pengguna bisa pakai Salin Isi */ }); }
+  /* dokter: "dr. Nama | No. SIP" per baris */
+  function parseDoctors(lines) {
+    return (lines || []).map(function (l) {
+      var p = String(l).split('|');
+      return { name: p[0].trim(), sip: (p[1] || '').trim() };
+    }).filter(function (d) { return d.name; });
+  }
+  function doctorName(x) { return String(x || '').split('|')[0].trim(); }
+  function sipFor(name, settings) {
+    var all = parseDoctors(settings.doctors.concat(settings.defaultDoctor ? [settings.defaultDoctor] : []));
+    var hit = all.filter(function (d) { return d.name.toLowerCase() === String(name).trim().toLowerCase() && d.sip; })[0];
+    return hit ? hit.sip : '';
+  }
+
+  /* logo untuk PDF: unggahan di Pengaturan, atau logo Hexindo bawaan (data URL, aman dari pembatasan file://) */
+  var logoCache = {};
+  function getLogo() {
+    var src = S.getSettings().logoData || window.KLINIK_LOGO_DATA || '';
+    if (!src) return Promise.resolve(null);
+    if (!logoCache[src]) {
+      logoCache[src] = new Promise(function (resolve) {
+        var im = new Image();
+        im.onload = function () {
+          try {
+            var c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
+            var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0);
+            var bin = atob(c.toDataURL('image/jpeg', 0.92).split(',')[1]), b = new Uint8Array(bin.length);
+            for (var i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+            resolve({ bytes: b, width: c.width, height: c.height });
+          } catch (e) { resolve(null); }
+        };
+        im.onerror = function () { resolve(null); };
+        im.src = src;
+      });
+    }
+    return logoCache[src];
+  }
+  function ensureSecret() {
+    var st = S.getSettings();
+    if (!st.verifySecret) st = S.saveSettings({ verifySecret: SU.randomSecret() });
+    return st;
+  }
+  /** Bangun PDF surat untuk kunjungan (null bila bukan istirahat sakit). */
+  function buildPdf(visit, lang) {
+    if (visit.recommendation !== 'SICK' || !visit.suratNo) return Promise.resolve(null);
+    var st = ensureSecret();
+    return getLogo().then(function (logo) { return SU.build(visit, st, { lang: lang, secret: st.verifySecret, logo: logo }); });
+  }
+  function pdfBlobUrl(pdf) { return URL.createObjectURL(new Blob([pdf.bytes], { type: 'application/pdf' })); }
+
   function safeFile(s) { return String(s).replace(/[^A-Za-z0-9._-]+/g, '-'); }
 
   /* ---------- navigasi ---------- */
@@ -142,21 +193,52 @@
     var now = new Date();
     setAdmission(now);
     $('#f-checkOutAt').value = toLocalInput(now);
-    $('#f-doctor').value = S.getSettings().defaultDoctor || '';
+    $('#f-doctor').value = doctorName(S.getSettings().defaultDoctor);
+    $('#f-status').value = M.STATUS[0];
+    showMedRows(3);
+    $('#dxHint').textContent = '';
+    onStatusChange();
     syncReco();
+  }
+
+  /* baris obat: 5 baris (nama + jumlah), awalnya 3 terlihat */
+  function buildMedRows() {
+    var box = $('#medRows'); box.textContent = '';
+    for (var i = 1; i <= 5; i++) {
+      box.appendChild(el('div', { class: 'med-row' }, [
+        el('input', { type: 'text', name: 'med' + i, list: 'drugList', maxlength: '80', placeholder: 'Obat ' + i, 'aria-label': 'Obat ' + i }),
+        el('input', { type: 'number', name: 'qty' + i, min: '0', max: '999', step: '1', inputmode: 'numeric', placeholder: 'Jml', 'aria-label': 'Jumlah obat ' + i })
+      ]));
+    }
+  }
+  function showMedRows(n) {
+    $$('#medRows .med-row').forEach(function (r, i) { r.hidden = i >= n; });
+    $('#btnAddMed').hidden = n >= 5;
+  }
+  function shownMedRows() { return $$('#medRows .med-row').filter(function (r) { return !r.hidden; }).length; }
+  function onStatusChange() {
+    $('#nikReq').hidden = M.NO_NIK_STATUS.indexOf($('#f-status').value) >= 0;
+  }
+  function onDiagnosisInput() {
+    var t = val('diagnosis'), hint = $('#dxHint'), hit = M.lookupDx(t);
+    if (!t) { hint.textContent = ''; hint.className = 'field-hint'; return; }
+    if (hit) { hint.textContent = 'Kelompok: ' + hit.group + ' \u00b7 ICD-10: ' + hit.icd; hint.className = 'field-hint ok'; }
+    else { hint.textContent = 'Belum ada di daftar. Tetap bisa dipakai; di rekap tercatat "Belum dipetakan".'; hint.className = 'field-hint'; }
   }
 
   function refreshLists() {
     var s = S.getSettings(), visits = S.listVisits();
-    var depts = unique(s.departments.concat(visits.map(function (v) { return v.dept; })))
+    var depts = unique(s.departments.concat(M.DEPARTMENTS, visits.map(function (v) { return v.dept; })))
       .sort(function (a, b) { return a.localeCompare(b, 'id'); });
-    var doctors = unique(s.doctors.concat(s.defaultDoctor ? [s.defaultDoctor] : []));
+    var doctors = unique(parseDoctors(s.doctors.concat(s.defaultDoctor ? [s.defaultDoctor] : [])).map(function (d) { return d.name; }));
     function fill(id, items) {
       var dl = $(id); dl.textContent = '';
       items.forEach(function (x) { dl.appendChild(el('option', { value: x })); });
     }
     fill('#deptList', depts);
     fill('#doctorList', doctors);
+    fill('#dxList', M.DIAGNOSES);
+    fill('#drugList', M.DRUGS);
     $('#clinicTitle').textContent = s.clinicName || 'Klinik HAP';
     document.title = (s.clinicName || 'Klinik HAP') + ' - Pencatatan Kunjungan';
     $('#historyCount').textContent = String(visits.length);
@@ -199,12 +281,12 @@
 
   function validate(v, visitAt, outAt) {
     var e = {};
-    if (!v.nik) e.nik = 'NIK wajib diisi.';
-    else if (!/^[A-Za-z0-9._\-\/]+$/.test(v.nik)) e.nik = 'NIK hanya boleh berisi huruf, angka, dan tanda - . / _';
+    if (!v.nik && M.NO_NIK_STATUS.indexOf(v.status) < 0) e.nik = 'NIK wajib diisi (kosongkan hanya untuk non-karyawan/tamu).';
+    else if (v.nik && !/^[A-Za-z0-9._\-\/]+$/.test(v.nik)) e.nik = 'NIK hanya boleh berisi huruf, angka, dan tanda - . / _';
     if (!v.name) e.name = 'Nama pekerja wajib diisi.';
     if (!v.dept) e.dept = 'Departemen wajib diisi.';
     if (!v.doctor) e.doctor = 'Dokter pemeriksa wajib diisi (atur dokter default di menu Pengaturan).';
-    if (!v.complaint) e.complaint = 'Keluhan / diagnosa wajib diisi.';
+    if (!v.diagnosis) e.diagnosis = 'Diagnosis wajib diisi (pilih dari daftar atau ketik).';
     if (!v.recommendation) e.recommendation = 'Pilih salah satu rekomendasi medis.';
     if (v.workerEmail && !E.isEmail(v.workerEmail)) e.workerEmail = 'Format email tidak valid.';
     if (v.supervisorEmail && !E.isEmail(v.supervisorEmail)) e.supervisorEmail = 'Format email tidak valid.';
@@ -226,7 +308,9 @@
       name: val('name'), nik: val('nik'), dept: val('dept'),
       workerEmail: val('workerEmail'), supervisorName: val('supervisorName'),
       supervisorEmail: val('supervisorEmail'), hrdEmail: val('hrdEmail'),
-      doctor: val('doctor'), complaint: val('complaint'), medications: val('medications'),
+      status: val('status') || M.STATUS[0], diagnosis: val('diagnosis'),
+      doctor: val('doctor'), complaint: val('complaint'),
+      workRelated: val('workRelated') === 'Ya' ? 'Ya' : 'Tidak', note: val('note'),
       recommendation: currentReco(),
       restDays: val('restDays'), restStart: val('restStart'), referralTo: val('referralTo')
     };
@@ -241,7 +325,12 @@
     try {
       // surat keterangan hanya diterbitkan untuk istirahat sakit
       var suratNo = '';
-      if (vals.recommendation === 'SICK') suratNo = E.buildSuratNo(settings.suratPrefix, visitAt, S.nextSeq(settings.suratPrefix, E.ymd(visitAt)));
+      if (vals.recommendation === 'SICK') suratNo = E.buildSuratNo(settings.suratPrefix, visitAt, S.nextSeq(settings.suratPrefix, E.ymd(visitAt).slice(0, 6)));
+      var meds = [];
+      for (var mi = 1; mi <= 5; mi++) {
+        var mn = val('med' + mi), mq = val('qty' + mi);
+        if (mn) meds.push({ name: mn, qty: mq !== '' && isFinite(Number(mq)) && Number(mq) >= 0 ? Math.floor(Number(mq)) : '' });
+      }
       visit = {
         suratNo: suratNo,
         createdAt: now.toISOString(), visitAt: visitAt.toISOString(), checkOutAt: outAt.toISOString(),
@@ -249,7 +338,10 @@
         workerEmail: vals.workerEmail, supervisorName: vals.supervisorName,
         supervisorEmail: vals.supervisorEmail, hrdEmail: vals.hrdEmail,
         doctor: vals.doctor, nurse: settings.nurseName || '',
-        complaint: vals.complaint, medications: vals.medications,
+        status: vals.status, diagnosis: vals.diagnosis, complaint: vals.complaint,
+        meds: meds, medications: meds.map(function (m) { return m.name; }).join('\n'),
+        workRelated: vals.workRelated, note: vals.note,
+        doctorSip: sipFor(vals.doctor, settings),
         recommendation: vals.recommendation,
         restDays: vals.recommendation === 'SICK' ? Number(vals.restDays) : 0,
         restStart: vals.recommendation === 'SICK' ? vals.restStart : '',
@@ -273,6 +365,7 @@
     var lang = E.normLang(S.getSettings().emailLang);
     var mails = E.buildEmails(visit, S.getSettings(), lang);
     setLangUi(lang);
+    preparePdf(visit, lang);
     var grid = $('#emailGrid'); grid.textContent = '';
     ROLES.forEach(function (r) {
       var card = $('#tplEmailCard').content.firstElementChild.cloneNode(true);
@@ -299,15 +392,33 @@
       : 'Data kunjungan tersimpan. Tidak ada surat sakit untuk rekomendasi ini.'));
     if (visit.suratNo) banner.appendChild(el('strong', { id: 'dlgSuratNo', text: visit.suratNo }));
     banner.hidden = !fromSubmit;
-    $('#emailDlgSub').textContent = visit.name + ' (' + visit.nik + ') · ' + E.fmtDate(new Date(visit.visitAt));
+    $('#emailDlgSub').textContent = visit.name + (visit.nik ? ' (' + visit.nik + ')' : '') + ' · ' + E.fmtDate(new Date(visit.visitAt));
     $('#mailNote').textContent = fromSubmit
       ? 'Buka tiap email di Outlook, periksa, lalu tekan Kirim di Outlook. Draf dapat dibuka lagi dari menu Riwayat.'
       : 'Buka tiap email di Outlook, periksa, lalu tekan Kirim di Outlook.';
+    $('#btnFinishOutlook').hidden = !state.canOutlook;
+    $('#btnDone').textContent = state.canOutlook ? 'Tutup saja' : 'Selesai';
+    $('#btnDone').classList.toggle('primary', !state.canOutlook);
     var dlg = $('#emailDialog');
     if (!dlg.open) dlg.showModal();
     $('#emailDialog .email-card .btn.primary').focus({ preventScroll: true });
     $('#emailDialog .dlg-body').scrollTop = 0;
   }
+
+  /** Bangun ulang PDF surat (bahasa mengikuti pilihan email) dan tampilkan bilahnya. */
+  function preparePdf(visit, lang) {
+    var bar = $('#suratBar'), has = visit.recommendation === 'SICK' && !!visit.suratNo;
+    bar.hidden = !has;
+    state.pdf = null;
+    if (!has) { state.pdfPromise = Promise.resolve(null); return; }
+    $('#suratFile').textContent = visit.suratNo;
+    state.pdfPromise = buildPdf(visit, lang).then(function (pdf) { state.pdf = pdf; return pdf; }, function (e) {
+      toast('Surat PDF gagal dibuat: ' + (e && e.message || 'kesalahan'), true); return null;
+    });
+  }
+  /** Jalankan cb(pdf|null) setelah PDF siap (null bila kunjungan ini tanpa surat). */
+  function withPdf(cb) { state.pdfPromise.then(function (pdf) { cb(pdf); }); }
+  function pdfAttachment(pdf) { return pdf ? { name: pdf.filename, bytes: pdf.bytes } : null; }
 
   function setLangUi(lang) {
     $$('#langSeg [data-lang]').forEach(function (b) { b.setAttribute('aria-checked', b.dataset.lang === lang ? 'true' : 'false'); });
@@ -329,6 +440,7 @@
       });
     });
     setLangUi(lang);
+    preparePdf(state.current, lang);
     toast(lang === 'en' ? 'Email diganti ke English.' : 'Email diganti ke Bahasa Indonesia.');
   }
 
@@ -383,8 +495,8 @@
         var a = el('a', { href: url }); document.body.appendChild(a); a.click(); a.remove();
         setOpened(role);
         toast(long
-          ? 'Isi email panjang, jadi sudah DISALIN. Di Outlook klik badan email lalu tekan Ctrl+V.'
-          : 'Membuka Outlook... Bila tidak muncul, lihat "Tidak terbuka di Outlook?" di bawah.');
+          ? 'Isi email panjang, jadi sudah DISALIN. Di Outlook klik badan email lalu tekan Ctrl+V.' + (state.pdf ? ' Lampirkan surat PDF secara manual.' : '')
+          : 'Membuka Outlook... ' + (state.pdf ? 'Lampirkan surat PDF secara manual (Unduh PDF). ' : '') + 'Bila tidak muncul, lihat "Tidak terbuka di Outlook?".');
         break;
       case 'outlook':
         var host = 'https://outlook.office.com/mail/deeplink/compose?';
@@ -401,16 +513,19 @@
         toast(w === null && !webLong && window.__calls === undefined
           ? 'Jendela Outlook Web diblokir browser. Izinkan pop-up untuk halaman ini lalu klik lagi.'
           : (webLong ? 'Isi email panjang, jadi sudah DISALIN. Di Outlook Web klik badan email lalu tekan Ctrl+V.'
-            : 'Membuka Outlook Web. Bila diminta, masuk dengan akun email kantor.'));
+            : 'Membuka Outlook Web. ' + (state.pdf ? 'Lampirkan surat PDF secara manual (Unduh PDF). ' : '') + 'Bila diminta, masuk dengan akun email kantor.'));
         break;
       case 'outlook-com':
         btn.disabled = true;
-        fetch('api/outlook', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: m.to, cc: m.cc, subject: m.subject, text: m.body, html: m.html })
+        state.pdfPromise.then(function (pdf) {
+          return fetch('api/outlook', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: m.to, cc: m.cc, subject: m.subject, text: m.body, html: m.html,
+              attachment: pdf ? { name: pdf.filename, base64: E.b64bytes(pdf.bytes) } : undefined })
+          });
         }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok && j.ok, j: j }; }); })
           .then(function (res) {
-            if (res.ok) { setOpened(role); toast('Draf dibuka di Outlook. Periksa, lalu tekan Kirim di Outlook.'); }
+            if (res.ok) { setOpened(role); toast(state.pdf ? 'Draf dibuka di Outlook dengan surat PDF terlampir. Periksa, lalu tekan Kirim.' : 'Draf dibuka di Outlook. Periksa, lalu tekan Kirim di Outlook.'); }
             else toast(res.j.error || 'Gagal membuka Outlook. Coba Unduh .eml.', true);
           }).catch(function () { toast('Server lokal tidak dapat dihubungi. Coba Unduh .eml.', true); })
           .then(function () { btn.disabled = false; });
@@ -422,9 +537,12 @@
         copyText(m.subject).then(function () { toast('Subjek disalin.'); }, function () { toast('Gagal menyalin.', true); });
         break;
       case 'eml':
-        download('email-' + (role === 'worker' ? 'pekerja' : 'atasan') + '-' + safeFile(v.suratNo || (E.ymd(new Date(v.visitAt)) + '-' + v.nik)) + '.eml', E.toEml(m), 'message/rfc822');
-        setOpened(role);
-        toast('File .eml diunduh. Klik dua kali, Outlook membukanya sebagai draf siap kirim.');
+        withPdf(function (pdf) {
+          download('email-' + (role === 'worker' ? 'pekerja' : 'atasan') + '-' + safeFile(v.suratNo || (E.ymd(new Date(v.visitAt)) + '-' + (v.nik || 'tamu'))) + '.eml',
+            E.toEml(Object.assign({}, m, { attachment: pdfAttachment(pdf) })), 'message/rfc822');
+          setOpened(role);
+          toast(pdf ? 'File .eml diunduh (surat PDF sudah terlampir). Klik dua kali untuk membukanya di Outlook.' : 'File .eml diunduh. Klik dua kali, Outlook membukanya sebagai draf siap kirim.');
+        });
         break;
       case 'mark':
         setSent(role, !(v.emailStatus && v.emailStatus[role]));
@@ -435,13 +553,48 @@
     }
   }
 
+  /** Selesai: buka kedua draf (dengan surat PDF) di Outlook classic, lalu tutup dialog. */
+  function finishToOutlook() {
+    var btn = $('#btnFinishOutlook'), v = state.current;
+    var todo = $$('#emailGrid .email-card').filter(function (c) {
+      var role = c.dataset.role, done = (v.emailOpened && v.emailOpened[role]) || (v.emailStatus && v.emailStatus[role]);
+      return !done;
+    });
+    if (!todo.length) { $('#emailDialog').close(); return; }
+    btn.disabled = true;
+    var old = btn.textContent; btn.textContent = 'Membuka Outlook...';
+    state.pdfPromise.then(function (pdf) {
+      var chain = Promise.resolve(), failed = '';
+      todo.forEach(function (card) {
+        chain = chain.then(function () {
+          var m = readCard(card), role = card.dataset.role;
+          return fetch('api/outlook', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: m.to, cc: m.cc, subject: m.subject, text: m.body, html: m.html,
+              attachment: pdf ? { name: pdf.filename, base64: E.b64bytes(pdf.bytes) } : undefined })
+          }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) {
+            if (r.ok && j.ok) setOpened(role); else failed = failed || j.error || 'Gagal membuka Outlook.';
+          }); });
+        });
+      });
+      return chain.then(function () { return failed; });
+    }).then(function (failed) {
+      if (failed) toast(failed, true);
+      else { $('#emailDialog').close(); toast('Draf dibuka di Outlook classic' + (state.pdf ? ' dengan surat PDF terlampir' : '') + '. Periksa, lalu tekan Kirim di tiap email.'); }
+    }).catch(function () { toast('Server lokal tidak dapat dihubungi. Gunakan Unduh .eml.', true); })
+      .then(function () { btn.disabled = false; btn.textContent = old; });
+  }
+
   function sendViaServer(btn, role, m) {
     if (!m.to || !m.to.split(',').every(E.isEmail)) { toast('Isi alamat email tujuan yang valid dulu.', true); return; }
     btn.disabled = true;
     var old = btn.textContent; btn.textContent = 'Mengirim...';
-    fetch('api/send', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: m.to, cc: m.cc, subject: m.subject, text: m.body, html: m.html })
+    state.pdfPromise.then(function (pdf) {
+      return fetch('api/send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: m.to, cc: m.cc, subject: m.subject, text: m.body, html: m.html,
+          attachment: pdf ? { name: pdf.filename, base64: E.b64bytes(pdf.bytes) } : undefined })
+      });
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok && j.ok, j: j }; });
     }).then(function (res) {
@@ -481,7 +634,7 @@
       if (from && day < from) return false;
       if (to && day > to) return false;
       if (!q) return true;
-      return [v.name, v.nik, v.dept, v.suratNo, v.complaint, v.doctor].join(' ').toLowerCase().indexOf(q) !== -1;
+      return [v.name, v.nik, v.dept, v.suratNo, v.diagnosis, v.complaint, v.doctor].join(' ').toLowerCase().indexOf(q) !== -1;
     });
   }
 
@@ -507,13 +660,14 @@
       var tr = el('tr', { 'data-id': v.id }, [
         el('td', {}, [E.fmtDateShort(d), el('small', { text: E.fmtTime(d) + (v.checkOutAt ? ' - ' + E.fmtTime(new Date(v.checkOutAt)) : '') })]),
         el('td', { class: 'small', text: v.suratNo || '-' }),
-        el('td', {}, [el('strong', { text: v.name }), el('small', { text: 'NIK ' + v.nik })]),
+        el('td', {}, [el('strong', { text: v.name }), el('small', { text: v.nik ? 'NIK ' + v.nik : (v.status || '') })]),
         el('td', { text: v.dept }),
         el('td', {}, [recoBadge(v)]),
         el('td', {}, [mailFlags(v)]),
         el('td', { class: 'right' }, [
           el('button', { type: 'button', class: 'btn small', 'data-act': 'detail', text: 'Detail' }), ' ',
           el('button', { type: 'button', class: 'btn small', 'data-act': 'emails', text: 'Email' }), ' ',
+          v.suratNo ? el('button', { type: 'button', class: 'btn small', 'data-act': 'surat', text: 'Surat' }) : '', ' ',
           el('button', { type: 'button', class: 'btn small danger', 'data-act': 'delete', text: 'Hapus' })
         ])
       ]);
@@ -532,6 +686,11 @@
     if (!v) return;
     if (btn.dataset.act === 'detail') openDetail(v);
     else if (btn.dataset.act === 'emails') openEmailDialog(v, false);
+    else if (btn.dataset.act === 'surat') {
+      buildPdf(v, E.normLang(S.getSettings().emailLang)).then(function (pdf) {
+        if (pdf) { download(pdf.filename, pdf.bytes, 'application/pdf'); toast('Surat sakit PDF diunduh.'); }
+      }, function () { toast('Surat PDF gagal dibuat.', true); });
+    }
     else if (btn.dataset.act === 'delete') {
       if (window.confirm('Hapus kunjungan ' + v.name + ' (' + (v.suratNo || E.fmtDateShort(new Date(v.visitAt))) + ')?\nTindakan ini tidak dapat dibatalkan.')) {
         S.deleteVisit(id); refreshLists(); renderHistory(); toast('Kunjungan dihapus.');
@@ -547,20 +706,23 @@
       ['No. Surat Sakit', v.suratNo || '-'],
       ['Tanggal', E.fmtDate(d)],
       ['Jam masuk - keluar', E.fmtTime(d) + (v.checkOutAt ? ' - ' + E.fmtTime(new Date(v.checkOutAt)) : '')],
-      ['Nama', v.name], ['NIK', v.nik], ['Departemen', v.dept],
+      ['Nama', v.name], ['NIK', v.nik || '-'], ['Status pasien', v.status || 'Karyawan'], ['Departemen', v.dept],
       ['Email pekerja', v.workerEmail || '-'],
       ['Atasan', [v.supervisorName, v.supervisorEmail].filter(Boolean).join(' - ') || '-'],
       ['Email HRD', v.hrdEmail || '-'],
       ['Dokter pemeriksa', v.doctor || '-'],
       ['Petugas', v.nurse || '-'],
-      ['Keluhan / diagnosa', v.complaint],
-      ['Obat diresepkan', v.medications || '-'],
+      ['Diagnosis', v.diagnosis || R.diagnosisOf(v) || '-'],
+      ['Keluhan / catatan klinis', v.complaint || '-'],
+      ['Obat diresepkan', E.medLines(v).join('\n') || '-'],
+      ['Dugaan terkait kerja', v.workRelated || 'Tidak'],
+      ['Catatan', v.note || '-'],
       ['Rekomendasi', (E.RECOMMENDATIONS[v.recommendation] || { label: '-' }).label]
     ];
     if (range) rows.push(['Durasi istirahat', E.restText(range)]);
     if (v.referralTo) rows.push(['Tujuan rujukan', v.referralTo]);
     rows.forEach(function (r) { body.appendChild(el('dt', { text: r[0] })); body.appendChild(el('dd', { text: r[1] })); });
-    $('#detailSub').textContent = v.name + ' (' + v.nik + ')';
+    $('#detailSub').textContent = v.name + (v.nik ? ' (' + v.nik + ')' : '');
     $('#detailDialog').dataset.id = v.id;
     $('#detailDialog').showModal();
   }
@@ -584,13 +746,47 @@
       var d = new Date(v.visitAt), r = E.restRange(v), s = v.emailStatus || {};
       out.push([
         v.suratNo, dmy(d), E.fmtTime(d), v.checkOutAt ? E.fmtTime(new Date(v.checkOutAt)) : '',
-        v.name, v.nik, v.dept, v.doctor, v.nurse, v.complaint, String(v.medications || '').replace(/\r?\n/g, ' | '),
+        v.name, v.nik, v.dept, v.doctor, v.nurse, [v.diagnosis, v.complaint].filter(Boolean).join(' | '), E.medLines(v).join(' | '),
         (E.RECOMMENDATIONS[v.recommendation] || { label: '' }).label, r ? r.days : '', r ? dmy(r.start) : '', r ? dmy(r.end) : '',
         v.referralTo, v.workerEmail, v.supervisorEmail, v.hrdEmail, s.worker ? 'Ya' : 'Belum', s.boss ? 'Ya' : 'Belum'
       ].map(function (c, i) { return csvCell(c, i === 5); }).join(';'));
     });
     download('riwayat-klinik-' + E.ymd(new Date()) + '.csv', '﻿' + out.join('\r\n'), 'text/csv;charset=utf-8');
     toast(rows.length + ' kunjungan diunduh.');
+  }
+
+  function exportXlsx() {
+    var rows = filteredVisits();
+    if (!rows.length) { toast('Tidak ada data untuk diunduh.', true); return; }
+    var bytes = R.toXlsx(rows, S.getSettings(), new Date());
+    download('rekap-kunjungan-klinik-' + E.ymd(new Date()) + '.xlsx', bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    toast('Rekap ' + rows.length + ' kunjungan diunduh (.xlsx, format sama dengan contoh).');
+  }
+
+  /* ---------- verifikasi surat ---------- */
+  function runVerify() {
+    var no = $('#vNo').value.trim(), code = $('#vCode').value.trim().toUpperCase(), out = $('#vResult');
+    // boleh menempel seluruh isi QR (teks) atau tautan verifikasi
+    var m1 = /No:\s*(\S+)/.exec(no), m2 = /Kode:\s*([0-9A-F]{4}-[0-9A-F]{4})/i.exec(no), m3 = /#v=([^|]+)\|([0-9A-F]{4}-[0-9A-F]{4})/i.exec(no);
+    if (m3) { no = decodeURIComponent(m3[1]); code = m3[2].toUpperCase(); }
+    else if (m1) { no = m1[1]; if (m2) code = m2[1].toUpperCase(); }
+    $('#vNo').value = no; $('#vCode').value = code;
+    out.className = 'verify-result';
+    if (!no || !code) { out.textContent = 'Isi nomor surat dan kode verifikasi.'; return; }
+    var v = S.listVisits().filter(function (x) { return x.suratNo && x.suratNo.toLowerCase() === no.toLowerCase(); })[0];
+    if (!v) { out.className = 'verify-result bad'; out.textContent = 'TIDAK DITEMUKAN: nomor surat ini tidak ada di catatan laptop klinik ini.'; return; }
+    var st = ensureSecret();
+    if (SU.verifyCode(v, st.verifySecret) !== code) { out.className = 'verify-result bad'; out.textContent = 'TIDAK COCOK: kode verifikasi tidak sesuai dengan catatan. Surat mungkin diubah atau dipalsukan.'; return; }
+    var r = E.restRange(v);
+    out.className = 'verify-result ok';
+    out.textContent = 'ASLI: ' + v.suratNo + ' atas nama ' + v.name + (v.nik ? ' (' + v.nik + ')' : '') + ', istirahat ' + (r ? E.restText(r) : '-') + ', dokter ' + (v.doctor || '-') + '.';
+  }
+  function checkHash() {
+    var m = /^#v=(.+)$/.exec(location.hash || '');
+    if (!m) return;
+    showView('history');
+    $('#vNo').value = '#v=' + m[1].replace(/^#?v=/, '');
+    runVerify();
   }
 
   /* ---------- pengaturan ---------- */
@@ -602,6 +798,13 @@
     f.elements.companyName.value = s.companyName;
     f.elements.doctors.value = s.doctors.join('\n');
     f.elements.defaultDoctor.value = s.defaultDoctor;
+    f.elements.periodStart.value = s.periodStart;
+    f.elements.address.value = s.address;
+    f.elements.phone.value = s.phone;
+    f.elements.verifyUrl.value = s.verifyUrl;
+    f.elements.hcNiks.value = s.hcNiks;
+    $('#logoHint').textContent = s.logoData ? 'Memakai logo unggahan.' : 'Memakai logo Hexindo bawaan.';
+    $('#btnLogoReset').hidden = !s.logoData;
     f.elements.suratPrefix.value = s.suratPrefix;
     f.elements.ccAlways.value = s.ccAlways;
     f.elements.departments.value = s.departments.join('\n');
@@ -611,7 +814,7 @@
     showErrors({}, f);
   }
   function updateSuratExample() {
-    var p = $('#settingsForm').elements.suratPrefix.value.trim() || 'SK/KLL';
+    var p = $('#settingsForm').elements.suratPrefix.value.trim() || E.DEFAULT_SURAT_PREFIX;
     $('#suratExample').textContent = E.buildSuratNo(p, new Date(), 1);
   }
   function onSettingsSubmit(ev) {
@@ -619,7 +822,7 @@
     var f = $('#settingsForm'), errs = {};
     var prefix = f.elements.suratPrefix.value.trim();
     var cc = f.elements.ccAlways.value.trim();
-    if (!/^[A-Za-z0-9][A-Za-z0-9\/_-]{0,28}$/.test(prefix)) errs.suratPrefix = 'Gunakan huruf, angka, / - _ (maks. 29 karakter), contoh: SK/KLL.';
+    if (!/^[A-Za-z0-9][A-Za-z0-9\/_-]{0,28}$/.test(prefix)) errs.suratPrefix = 'Gunakan huruf, angka, / - _ (maks. 29 karakter), contoh: SKS/QSHE-HAP.';
     if (cc && !checkEmails(cc)) errs.ccAlways = 'Ada email CC yang formatnya tidak valid.';
     if (Object.keys(errs).length) { showErrors(errs, f); return; }
     showErrors({}, f);
@@ -631,12 +834,35 @@
       companyName: f.elements.companyName.value.trim(),
       doctors: doctors, defaultDoctor: def || doctors[0] || '',
       suratPrefix: prefix, ccAlways: E.splitEmails(cc).join(', '),
+      periodStart: f.elements.periodStart.value || '2026-04-01', address: f.elements.address.value.trim(),
+      phone: f.elements.phone.value.trim(), verifyUrl: f.elements.verifyUrl.value.trim(), hcNiks: f.elements.hcNiks.value.trim(),
       departments: linesOf(f.elements.departments.value)
     });
     refreshLists();
-    if (state.pristine) $('#f-doctor').value = S.getSettings().defaultDoctor || '';
+    if (state.pristine) $('#f-doctor').value = doctorName(S.getSettings().defaultDoctor);
     loadSettingsForm();
     toast('Pengaturan disimpan.');
+  }
+
+  function onLogoFile(ev) {
+    var file = ev.target.files && ev.target.files[0];
+    ev.target.value = '';
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) { toast('Logo terlalu besar (maks. 3 MB).', true); return; }
+    var rd = new FileReader();
+    rd.onload = function () {
+      var im = new Image();
+      im.onload = function () {
+        var sc = Math.min(1, 900 / im.naturalWidth), c = document.createElement('canvas');
+        c.width = Math.round(im.naturalWidth * sc); c.height = Math.round(im.naturalHeight * sc);
+        var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height);
+        try { S.saveSettings({ logoData: c.toDataURL('image/jpeg', 0.92) }); } catch (e) { toast('Gagal menyimpan logo.', true); return; }
+        loadSettingsForm(); toast('Logo disimpan; dipakai di surat sakit berikutnya.');
+      };
+      im.onerror = function () { toast('Berkas bukan gambar yang valid.', true); };
+      im.src = String(rd.result);
+    };
+    rd.readAsDataURL(file);
   }
 
   function updateServerStatus() {
@@ -682,6 +908,12 @@
     img.src = 'img/logo.png';
 
     $$('.tab').forEach(function (t) { t.addEventListener('click', function () { showView(t.dataset.view); }); });
+
+    M.STATUS.forEach(function (st) { $('#f-status').appendChild(el('option', { value: st, text: st })); });
+    buildMedRows(); showMedRows(3);
+    $('#btnAddMed').addEventListener('click', function () { showMedRows(Math.min(5, shownMedRows() + 1)); });
+    $('#f-status').addEventListener('change', onStatusChange);
+    $('#f-diagnosis').addEventListener('input', onDiagnosisInput);
 
     form().addEventListener('submit', onSubmit);
     form().addEventListener('input', function (ev) {
@@ -745,6 +977,21 @@
     });
     $('#historyBody').addEventListener('click', onHistoryClick);
     $('#btnExport').addEventListener('click', exportCsv);
+    $('#btnExportXlsx').addEventListener('click', exportXlsx);
+    $('#btnFinishOutlook').addEventListener('click', finishToOutlook);
+    $('#btnVerify').addEventListener('click', runVerify);
+    $('#vCode').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') runVerify(); });
+    $('#s-logo').addEventListener('change', onLogoFile);
+    $('#btnLogoReset').addEventListener('click', function () { S.saveSettings({ logoData: '' }); loadSettingsForm(); toast('Memakai logo bawaan.'); });
+    $('#suratBar').addEventListener('click', function (ev) {
+      var b = ev.target.closest('[data-surat]');
+      if (!b) return;
+      withPdf(function (pdf) {
+        if (!pdf) { toast('Surat belum siap atau gagal dibuat.', true); return; }
+        if (b.dataset.surat === 'view') window.open(pdfBlobUrl(pdf), '_blank');
+        else { download(pdf.filename, pdf.bytes, 'application/pdf'); toast('Surat PDF diunduh.'); }
+      });
+    });
 
     $('#settingsForm').addEventListener('submit', onSettingsSubmit);
     $('#settingsForm').elements.suratPrefix.addEventListener('input', updateSuratExample);
@@ -766,6 +1013,7 @@
 
     refreshLists();
     resetForm();
+    checkHash();
     tick();
     setInterval(tick, 1000);
     detectServer();

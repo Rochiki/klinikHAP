@@ -40,7 +40,10 @@ test('direktori NIK mengingat data pekerja', () => {
 
 test('pengaturan: bawaan + penimpaan sebagian', () => {
   const s = fresh();
-  assert.equal(s.getSettings().suratPrefix, 'SK/KLL');
+  assert.equal(s.getSettings().suratPrefix, 'SKS/QSHE-HAP');
+  s.saveSettings({ suratPrefix: 'SK/KLL' });
+  assert.equal(s.getSettings().suratPrefix, 'SKS/QSHE-HAP'); // awalan lama dimigrasikan
+  assert.match(s.getSettings().address, /Pulo Kambing/);
   s.saveSettings({ nurseName: 'Rina' });
   assert.equal(s.getSettings().nurseName, 'Rina');
   assert.equal(s.getSettings().clinicName, 'Klinik HAP');

@@ -17,7 +17,13 @@
     companyName: 'PT Hexindo Adiperkasa Tbk',
     doctors: [],
     defaultDoctor: '',
-    suratPrefix: 'SK/KLL',
+    suratPrefix: 'SKS/QSHE-HAP',
+    periodStart: '2026-04-01',
+    hcNiks: '',
+    address: 'Jl. Pulo Kambing II Kav. I-II No. 33, Kawasan Industri Pulogadung, Jakarta Timur 13930',
+    phone: '(021) 461 1688',
+    verifyUrl: '',
+    verifySecret: '',
     ccAlways: '',
     emailLang: 'id',
     departments: ['HRGA', 'QSHE', 'Finance & Accounting', 'Procurement', 'Sales & Marketing',
@@ -54,7 +60,8 @@
     /* ---- pengaturan ---- */
     function getSettings() {
       var s = Object.assign({}, DEFAULT_SETTINGS, read('settings', {}));
-      ['nurseName', 'nurseTitle', 'companyName'].forEach(function (k) { if (!String(s[k] || '').trim()) s[k] = DEFAULT_SETTINGS[k]; });
+      ['nurseName', 'nurseTitle', 'companyName', 'suratPrefix', 'address', 'periodStart'].forEach(function (k) { if (!String(s[k] || '').trim()) s[k] = DEFAULT_SETTINGS[k]; });
+      if (s.suratPrefix === 'SK/KLL') s.suratPrefix = DEFAULT_SETTINGS.suratPrefix; // awalan lama diganti format baru
       s.doctors = Array.isArray(s.doctors) ? s.doctors : [];
       s.departments = Array.isArray(s.departments) ? s.departments : DEFAULT_SETTINGS.departments.slice();
       return s;
@@ -101,6 +108,7 @@
     /* ---- direktori NIK: isi otomatis kunjungan berikutnya ---- */
     function getDirectory() { return read('directory', {}); }
     function rememberWorker(v) {
+      if (!v.nik) return; // tamu/non-karyawan tanpa NIK tidak disimpan di direktori
       var d = getDirectory();
       d[v.nik] = {
         name: v.name, dept: v.dept, workerEmail: v.workerEmail || '',

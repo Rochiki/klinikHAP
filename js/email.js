@@ -56,12 +56,14 @@
       complaint: 'Keluhan / diagnosa', meds: 'Obat yang diresepkan', noMeds: 'Tidak ada obat yang diresepkan',
       rec: 'Rekomendasi medis', bossRec: 'Status rekomendasi kerja', rest: 'Durasi istirahat', referTo: 'Tujuan rujukan',
       workerSurat: function (no) {
-        return 'Surat Keterangan Sakit dengan No. ' + no + ' telah diserahkan langsung kepada Anda di klinik. ' +
-          'Mohon disimpan dan diserahkan kepada atasan/HRD sesuai ketentuan perusahaan.';
+        return 'Surat Keterangan Sakit No. ' + no + ' terlampir pada email ini (PDF). ' +
+          'Surat diterbitkan otomatis oleh sistem atas konsultasi dengan dokter perusahaan dan tidak memerlukan tanda tangan basah. ' +
+          'Salinannya juga dikirim kepada atasan dan HC.';
       },
       bossSurat: function (no) {
-        return 'Surat Keterangan Sakit dengan No. ' + no + ' telah diserahkan langsung kepada karyawan yang bersangkutan di klinik. ' +
-          'Mohon karyawan dapat menunjukkan surat tersebut sesuai ketentuan perusahaan.';
+        return 'Surat Keterangan Sakit No. ' + no + ' terlampir pada email ini (PDF). ' +
+          'Surat diterbitkan otomatis oleh sistem atas konsultasi dengan dokter perusahaan dan tidak memerlukan tanda tangan basah. ' +
+          'Keaslian surat dapat diperiksa dengan memindai kode QR pada surat.';
       },
       workerFit: 'Anda dinyatakan layak kembali bekerja. Bila keluhan muncul kembali atau memburuk, segera kembali ke klinik.',
       workerSick: 'Mohon beristirahat sesuai anjuran dokter. Bila keluhan tidak membaik atau memburuk, segera kembali ke klinik.',
@@ -70,7 +72,7 @@
       bossRefer: 'Karyawan direkomendasikan menjalani pemeriksaan lanjutan di fasilitas kesehatan rujukan.',
       privacy: 'Informasi ini hanya memuat status kerja. Rincian medis bersifat rahasia dan tidak disampaikan melalui email ini.',
       workerSubject: function (c, d, no) { return 'Ringkasan Kunjungan ' + c + ' - ' + d + (no ? ' (No. ' + no + ')' : ''); },
-      bossSubject: function (n, nik, s) { return 'Informasi Kunjungan Klinik: ' + n + ' (' + nik + ') - ' + s; },
+      bossSubject: function (n, nik, s) { return 'Informasi Kunjungan Klinik: ' + n + nik + ' - ' + s; },
       feedback: FEEDBACK_LINE,
       days: function (n) { return n + ' hari'; }, to: ' s.d. '
     },
@@ -83,12 +85,14 @@
       complaint: 'Complaint / diagnosis', meds: 'Medication prescribed', noMeds: 'No medication prescribed',
       rec: 'Medical recommendation', bossRec: 'Work status recommendation', rest: 'Rest duration', referTo: 'Referral to',
       workerSurat: function (no) {
-        return 'A sick leave certificate (No. ' + no + ') has been handed to you in person at the clinic. ' +
-          'Please keep it and submit it to your supervisor/HR according to company policy.';
+        return 'Your sick leave certificate (No. ' + no + ') is attached to this email (PDF). ' +
+          'It was issued automatically by the system following your consultation with the company doctor and needs no wet signature. ' +
+          'A copy is also sent to your supervisor and HC.';
       },
       bossSurat: function (no) {
-        return 'A sick leave certificate (No. ' + no + ') has been handed to the employee in person at the clinic. ' +
-          'Please ask the employee to present it according to company policy.';
+        return 'The sick leave certificate (No. ' + no + ') is attached to this email (PDF). ' +
+          'It was issued automatically by the system following a consultation with the company doctor and needs no wet signature. ' +
+          'Its authenticity can be checked by scanning the QR code on the certificate.';
       },
       workerFit: 'You have been declared fit to return to work. If your symptoms return or get worse, please come back to the clinic right away.',
       workerSick: "Please rest as advised by the doctor. If your symptoms do not improve or get worse, please come back to the clinic right away.",
@@ -97,7 +101,7 @@
       bossRefer: 'The employee is recommended to undergo further examination at a referral healthcare facility.',
       privacy: 'This message only covers work status. Medical details are confidential and are not shared by email.',
       workerSubject: function (c, d, no) { return c + ' Visit Summary - ' + d + (no ? ' (No. ' + no + ')' : ''); },
-      bossSubject: function (n, nik, s) { return 'Clinic Visit Notice: ' + n + ' (' + nik + ') - ' + s; },
+      bossSubject: function (n, nik, s) { return 'Clinic Visit Notice: ' + n + nik + ' - ' + s; },
       feedback: FEEDBACK_EN,
       days: function (n) { return n + (n === 1 ? ' day' : ' days'); }, to: ' to '
     }
@@ -133,8 +137,11 @@
   }
 
   /* ---------- nomor surat ---------- */
+  var ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+  var DEFAULT_SURAT_PREFIX = 'SKS/QSHE-HAP';
+  /** Format: 007/SKS/QSHE-HAP/XI/2026 (urut per bulan, memuat unsur QSHE dan HAP). */
   function buildSuratNo(prefix, date, seq) {
-    return (prefix || 'SK/KLL') + '/' + ymd(date) + '/' + String(seq).padStart(3, '0');
+    return String(seq).padStart(3, '0') + '/' + (prefix || DEFAULT_SURAT_PREFIX) + '/' + ROMAN[date.getMonth()] + '/' + date.getFullYear();
   }
 
   /* ---------- email: validasi & utilitas ---------- */
@@ -155,6 +162,20 @@
   /** Buang sapaan di depan nama ('Pak Budi' -> 'Budi') agar tidak jadi 'Bapak/Ibu Pak Budi'. */
   function bareName(n) {
     return String(n || '').trim().replace(/^(?:bapak\/ibu|bapak|ibu|pak|bu|mr\.?|mrs\.?|ms\.?)\s+/i, '');
+  }
+  /** Diagnosis (dan keluhan bila ada) untuk email pekerja. */
+  function complaintText(v) {
+    var d = String(v.diagnosis || '').trim(), c = String(v.complaint || '').trim();
+    return d && c && c.toLowerCase() !== d.toLowerCase() ? d + '\n' + c : (d || c);
+  }
+  /** Daftar obat (nama + jumlah bila ada). Mendukung data lama berupa teks. */
+  function medLines(v) {
+    if (Array.isArray(v.meds) && v.meds.length) {
+      return v.meds.filter(function (m) { return m && String(m.name || '').trim(); }).map(function (m) {
+        return String(m.name).trim() + (m.qty !== '' && m.qty != null && isFinite(m.qty) ? ' \u00d7 ' + m.qty : '');
+      });
+    }
+    return bullets(v.medications);
   }
   function row(label, value) {
     var ls = lines(value);
@@ -196,8 +217,8 @@
     w.push(t.inOut + ': ' + timeRange);
     w.push(t.doctor + ': ' + (v.doctor || '-'));
     w.push('');
-    w.push(row(t.complaint, v.complaint));
-    w.push(list(t.meds, bullets(v.medications), t.noMeds));
+    w.push(row(t.complaint, complaintText(v)));
+    w.push(list(t.meds, medLines(v), t.noMeds));
     w.push('');
     w.push(t.rec + ': ' + rec.label);
     if (range) w.push(t.rest + ': ' + restText(range, lang));
@@ -222,7 +243,7 @@
     b.push(t.bossIntro(clinic));
     b.push('');
     b.push(t.name + ': ' + v.name);
-    b.push(t.nik + ': ' + v.nik);
+    b.push(t.nik + ': ' + (v.nik || '-'));
     b.push(t.dept + ': ' + v.dept);
     b.push('');
     b.push(t.visitDate + ': ' + fmtDate(visitAt, lang));
@@ -252,7 +273,7 @@
       boss: {
         to: v.supervisorEmail || '',
         cc: hrd.concat(cc).join(', '),
-        subject: t.bossSubject(v.name, v.nik, rec.short),
+        subject: t.bossSubject(v.name, v.nik ? ' (' + v.nik + ')' : '', rec.short),
         body: b.join('\n')
       }
     };
@@ -337,6 +358,12 @@
     return 'mailto:' + encodeURIComponent(m.to || '').replace(/%2C/gi, ',').replace(/%40/g, '@') + '?' + q.join('&');
   }
 
+  function b64bytes(bytes) {
+    if (typeof Buffer !== 'undefined') return Buffer.from(bytes).toString('base64');
+    var bin = '';
+    for (var i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+    return btoa(bin);
+  }
   function b64(str) {
     if (typeof Buffer !== 'undefined') return Buffer.from(str, 'utf8').toString('base64');
     var bytes = new TextEncoder().encode(str), bin = '';
@@ -353,34 +380,45 @@
   function wrap76(b) { return b.replace(/(.{76})/g, '$1\r\n'); }
   function crlf(t) { return String(t || '').replace(/\r?\n/g, '\r\n'); }
 
-  /** File .eml (draf; Outlook membukanya sebagai email yang siap dikirim). Bila ada m.html: teks + HTML. */
+  /**
+   * File .eml (draf; Outlook membukanya sebagai email yang siap dikirim).
+   * m.html: teks + HTML. m.attachment {name, bytes:Uint8Array}: lampiran PDF.
+   */
   function toEml(m) {
-    var h = [];
+    var h = [], att = m.attachment && m.attachment.bytes ? m.attachment : null;
     h.push('X-Unsent: 1');
     if (m.to) h.push('To: ' + m.to);
     if (m.cc) h.push('Cc: ' + m.cc);
     h.push('Subject: ' + encodeHeader(m.subject || ''));
     h.push('MIME-Version: 1.0');
-    if (!m.html) {
-      h.push('Content-Type: text/plain; charset=UTF-8');
-      h.push('Content-Transfer-Encoding: base64');
-      return h.join('\r\n') + '\r\n\r\n' + wrap76(b64(crlf(m.body))) + '\r\n';
-    }
-    var bd = '=_klinikhap_' + Math.random().toString(36).slice(2, 12);
-    h.push('Content-Type: multipart/alternative; boundary="' + bd + '"');
-    function part(type, content) {
+    var rnd = function () { return '=_klinikhap_' + Math.random().toString(36).slice(2, 12); };
+    function part(bd, type, content) {
       return '--' + bd + '\r\nContent-Type: ' + type + '; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n' +
         wrap76(b64(content)) + '\r\n';
     }
-    return h.join('\r\n') + '\r\n\r\n' + part('text/plain', crlf(m.body)) + part('text/html', m.html) + '--' + bd + '--\r\n';
+    var body;
+    if (!m.html) {
+      body = { head: 'Content-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64', data: wrap76(b64(crlf(m.body))) + '\r\n' };
+    } else {
+      var alt = rnd();
+      body = { head: 'Content-Type: multipart/alternative; boundary="' + alt + '"',
+        data: part(alt, 'text/plain', crlf(m.body)) + part(alt, 'text/html', m.html) + '--' + alt + '--\r\n' };
+    }
+    if (!att) return h.join('\r\n') + '\r\n' + body.head + '\r\n\r\n' + body.data;
+    var mix = rnd(), fname = encodeHeader(att.name).replace(/"/g, '');
+    h.push('Content-Type: multipart/mixed; boundary="' + mix + '"');
+    return h.join('\r\n') + '\r\n\r\n' +
+      '--' + mix + '\r\n' + body.head + '\r\n\r\n' + body.data + '\r\n' +
+      '--' + mix + '\r\nContent-Type: application/pdf; name="' + fname + '"\r\nContent-Transfer-Encoding: base64\r\n' +
+      'Content-Disposition: attachment; filename="' + fname + '"\r\n\r\n' + wrap76(b64bytes(att.bytes)) + '\r\n--' + mix + '--\r\n';
   }
 
   return {
-    FEEDBACK_LINE: FEEDBACK_LINE, FEEDBACK_EN: FEEDBACK_EN, LANGS: LANGS, normLang: normLang, DEFAULT_SIGNATURE: DEFAULT_SIGNATURE,
+    FEEDBACK_LINE: FEEDBACK_LINE, FEEDBACK_EN: FEEDBACK_EN, LANGS: LANGS, normLang: normLang, DEFAULT_SIGNATURE: DEFAULT_SIGNATURE, DEFAULT_SURAT_PREFIX: DEFAULT_SURAT_PREFIX,
     RECOMMENDATIONS: RECOMMENDATIONS,
     pad: pad, ymd: ymd, fmtDate: fmtDate, fmtDateShort: fmtDateShort, fmtTime: fmtTime,
     parseYmd: parseYmd, restRange: restRange, restText: restText,
     buildSuratNo: buildSuratNo, isEmail: isEmail, splitEmails: splitEmails,
-    buildEmails: buildEmails, toHtml: toHtml, mailtoUrl: mailtoUrl, toEml: toEml
+    buildEmails: buildEmails, medLines: medLines, b64bytes: b64bytes, toHtml: toHtml, mailtoUrl: mailtoUrl, toEml: toEml
   };
 });

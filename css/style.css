@@ -240,3 +240,14 @@ details.help li { margin: .35rem 0; }
   .actionbar .btn { flex: 1; }
 }
 @media print { .topbar, .actionbar, .tabs { display: none; } }
+
+/* ---- formulir obat, bilah surat, verifikasi ---- */
+.med-rows { display: grid; gap: .4rem; margin-bottom: .5rem; }
+.med-row { display: grid; grid-template-columns: 1fr 5.5rem; gap: .5rem; }
+.med-row[hidden] { display: none; }
+.surat-bar { margin: 0 1.25rem .6rem; padding: .6rem .9rem; border: 1px solid var(--line, #d5d9df); border-left: 4px solid #f26a1b; border-radius: 8px; background: #fffaf5; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem .9rem; }
+.surat-bar > p { flex-basis: 100%; margin: 0; }
+.surat-bar .small { display: block; }
+.verify-result { margin: .6rem 0 0; font-weight: 600; }
+.verify-result.ok { color: #15623a; }
+.verify-result.bad { color: #b3261e; }

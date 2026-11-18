@@ -11,11 +11,14 @@ menyiapkan **dua email** (pekerja dan atasan/HRD) yang **dibuka dulu di Outlook*
 
 | Fitur | Keterangan |
 |---|---|
-| Form kunjungan | NIK, nama, departemen, keluhan/diagnosa, obat, dokter pemeriksa, rekomendasi (Fit to Work / Istirahat Sakit / Rujukan), durasi istirahat |
+| Form kunjungan | Status pasien, NIK, nama, departemen (pilih/ketik), diagnosis (pilih/ketik), keluhan, obat 1-5 + jumlah, dokter pemeriksa, rekomendasi (Fit to Work / Istirahat Sakit / Rujukan), durasi istirahat, dugaan terkait kerja, catatan |
 | Waktu otomatis | Jam masuk terisi saat form mulai diisi, jam keluar saat disimpan; bisa diubah manual (centang "Ubah waktu secara manual") |
-| Surat Keterangan Sakit | Hanya untuk **Istirahat Sakit**: nomor otomatis `SK/KLL/YYYYMMDD/XXX` (urut per hari; awalan dapat diubah). Fit to Work dan Rujukan tidak menerbitkan surat sakit |
+| Surat Keterangan Sakit (PDF) | Hanya untuk **Istirahat Sakit**. Nomor `007/SKS/QSHE-HAP/XI/2026` (urut per bulan; bagian tengah dapat diubah di Pengaturan). Kop logo Hexindo + alamat HO Pulokambing, tulisan "diterbitkan otomatis oleh sistem", nama dokter pemeriksa (+ No. SIP bila diisi), **kode QR + kode verifikasi**. Surat **tanpa diagnosis**, karena salinan yang sama dikirim ke pekerja, atasan, dan HC. PDF ikut terlampir otomatis pada Outlook Classic langsung, `.eml`, dan SMTP |
+| Verifikasi surat | Di menu Riwayat: masukkan nomor + kode (atau tempel isi QR). Pengecekan dilakukan terhadap catatan di laptop klinik. Bila alamat verifikasi diisi di Pengaturan, QR berisi tautan ke aplikasi |
+| Rekap Excel | Riwayat > **Unduh Rekap (.xlsx)**: tata letak sama dengan contoh `INPUT_KUNJUNGAN` (36 kolom, warna kuning/abu-abu, judul sama). Kolom otomatis (kelompok penyakit, ICD-10, jenis obat, kelompok kerja, bulan-ke, dll.) sudah berisi nilai. NIK + inisial saja, tanpa nama lengkap. Daftar acuan ada di `js/master.js` |
+| Selesai | Bila server lokal aktif di Windows, tombol **Selesai & Buka Kedua Email di Outlook Classic** membuka kedua draf (dengan PDF) sekaligus |
 | **Simpan & Kirim Notifikasi** | Menyimpan ke riwayat lalu menampilkan 2 draf email yang bisa disunting |
-| Email 1 (Pekerja) | Ringkasan kunjungan, dokter, rekomendasi; untuk istirahat sakit, info Surat Keterangan Sakit telah diserahkan di klinik |
+| Email 1 (Pekerja) | Ringkasan kunjungan, dokter, rekomendasi; untuk istirahat sakit, Surat Keterangan Sakit (PDF) terlampir |
 | Email 2 (Atasan/HRD) | Nama, NIK, dept, jam masuk-keluar, status kerja, info surat. **Tanpa diagnosis, obat, maupun tujuan rujukan** |
 | Bahasa email | Di dialog email ada pilihan **Bahasa Indonesia / English**. Isi, subjek, tanggal, dan footer ikut berganti; pilihan diingat untuk kunjungan berikutnya. Mengganti bahasa membuat ulang isi email (ada konfirmasi bila isi sudah Anda ubah) |
 | Tanda tangan | `Best Regards, Eny Rohmatul Fitri, Perawat Perusahaan, PT Hexindo Adiperkasa Tbk` (dapat diubah di Pengaturan) |
@@ -67,14 +70,17 @@ Aplikasi tersedia di `https://rochiki.github.io/klinikHAP/`. Data tetap tersimpa
 pengguna; fitur Kirim Langsung (SMTP) tidak tersedia di Pages, sedangkan tombol Outlook tetap bekerja.
 Karena repositori GitHub Pages bersifat publik (kecuali paket berbayar), jangan menaruh data pekerja di repo.
 
-**Logo:** letakkan berkas logo resmi di `img/logo.png`; otomatis tampil di pojok kiri atas.
+**Logo:** logo resmi Hexindo sudah terpasang (`img/logo.png` untuk tampilan, `js/logo-data.js` untuk PDF). Untuk menggantinya, unggah di Pengaturan > Logo untuk surat sakit.
 
 ## Struktur proyek
 
 ```
 index.html            halaman aplikasi
 css/style.css         tampilan
-js/email.js           pembuat draf email, nomor surat, mailto, .eml (juga diuji di Node)
+js/email.js           pembuat draf email, nomor surat, mailto, .eml + lampiran (juga diuji di Node)
+js/master.js          daftar acuan: diagnosis/ICD-10, jenis obat, departemen -> kelompok kerja
+js/recap.js, xlsx.js  rekap Excel format INPUT_KUNJUNGAN (penulis .xlsx tanpa dependensi)
+js/surat.js, pdf.js   Surat Keterangan Sakit PDF, kode verifikasi, QR (js/vendor/qrcode.js, MIT)
 js/store.js           penyimpanan localStorage, riwayat, cadangan
 js/app.js             logika antarmuka
 server/server.js      server lokal opsional (berkas web + SMTP lewat nodemailer)
@@ -89,8 +95,9 @@ test/                 tes otomatis (npm test)
 - Email atasan/HRD sengaja tidak memuat diagnosis, obat, atau tujuan rujukan. Periksa tetap draf sebelum mengirim.
 - Email ke pekerja memuat diagnosis dan obat. Pastikan alamat tujuan benar (kolom Kepada dapat disunting).
 - Unduh **cadangan** berkala; menghapus data browser akan menghapus riwayat. Simpan berkas cadangan di tempat aman.
-- Nomor surat sakit dihitung per laptop. Bila dipakai di lebih dari satu laptop, awalan nomor sebaiknya dibedakan
-  (misal `SK/KLL1`, `SK/KLL2`) agar tidak terjadi nomor kembar.
+- Nomor surat sakit dihitung per laptop. Bila dipakai di lebih dari satu laptop, bagian tengah nomor sebaiknya dibedakan
+  (misal `SKS/QSHE-HAP1`) agar tidak terjadi nomor kembar.
+- Repositori ini tidak berisi data pekerja. Jangan menaruh NIK, rekap, atau cadangan kunjungan ke dalam repo.
 - Pemrosesan data kesehatan karyawan tunduk pada UU PDP; sesuaikan dengan kebijakan perusahaan.
 
 ## Pengujian
