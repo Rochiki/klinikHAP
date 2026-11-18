@@ -73,6 +73,10 @@
     return lines(text).map(function (l) { return l.replace(/^(?:[-*•]|\d+[.)])\s+/, ''); });
   }
   /** "Label: nilai" untuk satu baris; blok berindentasi untuk beberapa baris. */
+  /** Buang sapaan di depan nama ('Pak Budi' -> 'Budi') agar tidak jadi 'Bapak/Ibu Pak Budi'. */
+  function bareName(n) {
+    return String(n || '').trim().replace(/^(?:bapak\/ibu|bapak|ibu|pak|bu|mr\.?|mrs\.?|ms\.?)\s+/i, '');
+  }
   function row(label, value) {
     var ls = lines(value);
     if (ls.length <= 1) return label + ': ' + (ls[0] || '-');
@@ -102,7 +106,7 @@
     /* --- Email 1: pekerja --- */
     var w = [];
     w.push('Kepada Yth.');
-    w.push('Bapak/Ibu ' + v.name);
+    w.push('Bapak/Ibu ' + bareName(v.name));
     w.push(v.dept);
     w.push('');
     w.push('Terima kasih telah berkunjung ke ' + clinic + '. Berikut ringkasan kunjungan Anda:');
@@ -110,8 +114,10 @@
     w.push('Tanggal kunjungan: ' + fmtDate(visitAt));
     w.push('Jam masuk - keluar: ' + timeRange);
     w.push('Dokter pemeriksa: ' + (v.doctor || '-'));
+    w.push('');
     w.push(row('Keluhan / diagnosa', v.complaint));
     w.push(list('Obat yang diresepkan', bullets(v.medications), 'Tidak ada obat yang diresepkan'));
+    w.push('');
     w.push('Rekomendasi medis: ' + rec.label);
     if (range) w.push('Durasi istirahat: ' + restText(range));
     if (v.recommendation === 'REFER' && v.referralTo) w.push('Tujuan rujukan: ' + v.referralTo);
@@ -138,15 +144,17 @@
     /* --- Email 2: atasan / HRD (tanpa diagnosis & obat) --- */
     var b = [];
     b.push('Kepada Yth.');
-    b.push('Bapak/Ibu ' + (v.supervisorName || 'Atasan / HRD'));
+    b.push('Bapak/Ibu ' + (bareName(v.supervisorName) || 'Atasan / HRD'));
     b.push('');
     b.push('Berikut informasi kunjungan karyawan ke ' + clinic + ':');
     b.push('');
     b.push('Nama: ' + v.name);
     b.push('NIK: ' + v.nik);
     b.push('Departemen: ' + v.dept);
+    b.push('');
     b.push('Tanggal kunjungan: ' + fmtDate(visitAt));
     b.push('Jam masuk - keluar: ' + timeRange);
+    b.push('');
     b.push('Status rekomendasi kerja: ' + rec.label);
     if (range) b.push('Durasi istirahat: ' + restText(range));
     b.push('');
@@ -190,17 +198,70 @@
   function escapeHtml(t) {
     return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
-  /** Ubah teks email menjadi HTML sederhana; URL otomatis menjadi tautan yang dapat diklik. */
-  function toHtml(text) {
-    var paras = String(text || '').replace(/\r\n/g, '\n').split(/\n{2,}/).map(function (p) {
-      var html = escapeHtml(p).split('\n').map(function (line) {
-        var indent = /^ */.exec(line)[0].length;
-        return new Array(indent + 1).join('&nbsp;') + line.slice(indent);
-      }).join('<br>');
-      html = html.replace(/(https?:\/\/[^\s<]*[^\s<.,;:!?)])/g, '<a href="$1">$1</a>');
-      return '<p style="margin:0 0 12px 0">' + html + '</p>';
+  function linkify(escaped) {
+    return escaped.replace(/(https?:\/\/[^\s<]*[^\s<.,;:!?)])/g, '<a href="$1">$1</a>');
+  }
+  function lineHtml(line) {
+    var indent = /^ */.exec(line)[0].length;
+    return new Array(indent + 1).join('&nbsp;') + linkify(escapeHtml(line.slice(indent)));
+  }
+  /** Paragraf berisi "Label: nilai" (nilai boleh berlanjut di baris berindentasi) -> daftar baris, atau null. */
+  function parseDetails(p) {
+    var rows = [];
+    var lines = p.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (/^\s{2,}\S/.test(line) && rows.length) { rows[rows.length - 1].lines.push(line.trim()); continue; }
+      var m = /^([^:\n]{2,40}):(?:\s+(.+))?$/.exec(line);
+      if (!m) return null;
+      rows.push({ label: m[1], lines: m[2] ? [m[2]] : [] });
+    }
+    if (!rows.length) return null;
+    for (var j = 0; j < rows.length; j++) if (!rows[j].lines.length) return null;
+    return rows;
+  }
+  function valueHtml(ls) {
+    var out = [], items = [];
+    function flush() {
+      if (items.length) {
+        out.push('<ul style="' + CELL_FONT + 'margin:0;padding-left:20px">' + items.map(function (t) { return '<li>' + t + '</li>'; }).join('') + '</ul>');
+        items = [];
+      }
+    }
+    ls.forEach(function (l) {
+      var m = /^[-*\u2022]\s+(.*)$/.exec(l);
+      if (m) items.push(linkify(escapeHtml(m[1])));
+      else { flush(); out.push(linkify(escapeHtml(l))); }
     });
-    return '<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1f2328">' + paras.join('') + '</div>';
+    flush();
+    return out.join('<br>');
+  }
+  var CELL_FONT = 'font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1f2328;';
+  function detailsTable(groups) {
+    var trs = [];
+    groups.forEach(function (rows, gi) {
+      if (gi > 0) trs.push('<tr><td colspan="2" style="height:10px;line-height:10px;font-size:1px">&nbsp;</td></tr>');
+      rows.forEach(function (r) {
+        trs.push('<tr><td valign="top" nowrap style="' + CELL_FONT + 'padding:3px 18px 3px 0;font-weight:bold;white-space:nowrap">' +
+          escapeHtml(r.label) + '</td><td valign="top" style="' + CELL_FONT + 'padding:3px 0">' + valueHtml(r.lines) + '</td></tr>');
+      });
+    });
+    return '<table border="0" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 14px 0">' + trs.join('') + '</table>';
+  }
+
+  /** Ubah teks email menjadi HTML: rincian berlabel menjadi tabel rapi; URL menjadi tautan yang dapat diklik. */
+  function toHtml(text) {
+    var paras = String(text || '').replace(/\r\n/g, '\n').split(/\n{2,}/);
+    var out = [], pending = [];
+    function flushTable() { if (pending.length) { out.push(detailsTable(pending)); pending = []; } }
+    paras.forEach(function (p) {
+      var rows = parseDetails(p);
+      if (rows) { pending.push(rows); return; }
+      flushTable();
+      out.push('<p style="margin:0 0 14px 0;line-height:1.4">' + p.split('\n').map(lineHtml).join('<br>') + '</p>');
+    });
+    flushTable();
+    return '<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1f2328">' + out.join('') + '</div>';
   }
 
   /* ---------- mailto & .eml ---------- */

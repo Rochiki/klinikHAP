@@ -186,3 +186,31 @@ test('.eml dengan HTML: multipart/alternative berisi teks dan HTML yang dapat di
   assert.match(parts[1], /Content-Type: text\/html/); assert.equal(dec(parts[1]), html);
   assert.ok(eml.trimEnd().endsWith('--' + bd + '--'));
 });
+
+test('toHtml: rincian "Label: nilai" menjadi tabel; kalimat berakhiran titik dua tidak salah dikenali', () => {
+  const m = E.buildEmails(visit({ recommendation: 'FIT', restDays: 0, suratNo: '' }), settings);
+  const h = E.toHtml(m.worker.body);
+  assert.match(h, /<table[^>]*>/);
+  assert.match(h, /<td[^>]*>Tanggal kunjungan<\/td><td[^>]*>Rabu, 18 November 2026<\/td>/);
+  assert.match(h, /<td[^>]*>Obat yang diresepkan<\/td><td[^>]*><ul[^>]*><li>Paracetamol 500 mg 3x1<\/li><li>Vitamin C 1x1<\/li><\/ul>/);
+  assert.equal((h.match(/<table/g) || []).length, 1, 'kelompok rincian digabung dalam satu tabel agar kolom sejajar');
+  assert.ok(!/<td[^>]*>Terima kasih/.test(h) && !/<td[^>]*>Berikut ringkasan/.test(h), 'kalimat pengantar bukan baris tabel');
+  assert.match(h, /<p[^>]*>Terima kasih telah berkunjung[^<]*Anda:<\/p>/);
+  // keluhan multibaris tetap satu sel
+  assert.match(h, /<td[^>]*>Keluhan \/ diagnosa<\/td><td[^>]*>Demam dan batuk 3 hari<br>Riwayat alergi: tidak ada<\/td>/);
+  // email atasan juga berupa tabel
+  assert.match(E.toHtml(E.buildEmails(visit(), settings).boss.body), /<td[^>]*>NIK<\/td><td[^>]*>0012345<\/td>/);
+});
+
+test('teks polos: rincian dipisah per kelompok dengan baris kosong', () => {
+  const b = E.buildEmails(visit(), settings).worker.body;
+  assert.match(b, /Dokter pemeriksa: dr\. Andi\n\nKeluhan \/ diagnosa:/);
+  assert.match(b, /- Vitamin C 1x1\n\nRekomendasi medis:/);
+});
+
+test('sapaan tidak menggandakan gelar di depan nama', () => {
+  const m = E.buildEmails(visit({ name: 'Ibu Sari Dewi', supervisorName: 'Pak Budi' }), settings);
+  assert.match(m.worker.body, /^Kepada Yth\.\nBapak\/Ibu Sari Dewi\n/);
+  assert.match(m.boss.body, /^Kepada Yth\.\nBapak\/Ibu Budi\n/);
+  assert.match(E.buildEmails(visit({ supervisorName: 'Budiman' }), settings).boss.body, /Bapak\/Ibu Budiman\n/); // 'Bu' bukan awalan kata
+});
