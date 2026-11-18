@@ -76,7 +76,7 @@
     return new Promise(function (resolve, reject) {
       var host = document.querySelector('dialog[open]') || document.body;
       var ta = el('textarea', { 'aria-hidden': 'true' });
-      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      ta.value = text; ta.className = 'clip-ghost';
       host.appendChild(ta); ta.select();
       var ok = false;
       try { ok = document.execCommand('copy'); } catch (e) { /* gagal */ }
@@ -84,6 +84,27 @@
       ok ? resolve() : reject(new Error('copy gagal'));
     });
   }
+  /* Salin sebagai email berformat (tabel rapi + link aktif) beserta teks polos cadangan; tempel dengan Ctrl+V di badan email. */
+  function copyRich(html, text) {
+    // utama: isi papan klip diatur lewat peristiwa 'copy' (HTML apa adanya, tanpa gaya inline, patuh CSP)
+    var host = document.querySelector('dialog[open]') || document.body;
+    var ta = el('textarea', { 'aria-hidden': 'true' });
+    ta.value = text; ta.className = 'clip-ghost';
+    var onCopy = function (e) { e.clipboardData.setData('text/html', html); e.clipboardData.setData('text/plain', text); e.preventDefault(); };
+    document.addEventListener('copy', onCopy);
+    host.appendChild(ta); ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { /* coba cara lain */ }
+    document.removeEventListener('copy', onCopy); ta.remove();
+    if (ok) return Promise.resolve();
+    if (navigator.clipboard && window.isSecureContext && window.ClipboardItem) {
+      return navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' })
+      })]);
+    }
+    return Promise.reject(new Error('copy gagal'));
+  }
+  function copyRichQuiet(m) { return copyRich(m.html, m.body).catch(function () { return copyText(m.body); }).catch(function () { /* Salin Isi */ }); }
   function copyQuiet(t) { copyText(t).catch(function () { /* pengguna bisa pakai Salin Isi */ }); }
   /* dokter: "dr. Nama | No. SIP" per baris */
   function parseDoctors(lines) {
@@ -489,14 +510,12 @@
     var v = state.current;
     switch (btn.dataset.action) {
       case 'mailto':
-        // Windows menolak link mailto > ~2000 karakter; bila terlalu panjang, isi disalin ke clipboard
-        var url = E.mailtoUrl(m), long = url.length > MAILTO_MAX;
-        if (long) { url = E.mailtoUrl({ to: m.to, cc: m.cc, subject: m.subject, body: '' }); copyQuiet(m.body); }
+        // mailto hanya bisa teks polos; agar tabel & link aktif terbawa, isi disalin berformat lalu ditempel (Ctrl+V)
+        var url = E.mailtoUrl({ to: m.to, cc: m.cc, subject: m.subject, body: '' });
+        copyRichQuiet(m);
         var a = el('a', { href: url }); document.body.appendChild(a); a.click(); a.remove();
         setOpened(role);
-        toast(long
-          ? 'Isi email panjang, jadi sudah DISALIN. Di Outlook klik badan email lalu tekan Ctrl+V.' + (state.pdf ? ' Lampirkan surat PDF secara manual.' : '')
-          : 'Membuka Outlook... ' + (state.pdf ? 'Lampirkan surat PDF secara manual (Unduh PDF). ' : '') + 'Bila tidak muncul, lihat "Tidak terbuka di Outlook?".');
+        toast('Membuka Outlook... Isi email sudah DISALIN (berformat): klik badan email lalu tekan Ctrl+V.' + (state.pdf ? ' Lampirkan surat PDF secara manual.' : ''));
         break;
       case 'outlook':
         var host = 'https://outlook.office.com/mail/deeplink/compose?';
@@ -506,14 +525,13 @@
           if (withBody) q.push('body=' + encodeURIComponent(m.body.replace(/\r?\n/g, '\r\n')));
           return q.join('&');
         };
-        var web = host + qs(true), webLong = web.length > OUTLOOK_WEB_MAX;
-        if (webLong) { web = host + qs(false); copyQuiet(m.body); }
+        var web = host + qs(false);
+        copyRichQuiet(m);
         var w = window.open(web, '_blank', 'noopener');
         setOpened(role);
-        toast(w === null && !webLong && window.__calls === undefined
+        toast(w === null && window.__calls === undefined
           ? 'Jendela Outlook Web diblokir browser. Izinkan pop-up untuk halaman ini lalu klik lagi.'
-          : (webLong ? 'Isi email panjang, jadi sudah DISALIN. Di Outlook Web klik badan email lalu tekan Ctrl+V.'
-            : 'Membuka Outlook Web. ' + (state.pdf ? 'Lampirkan surat PDF secara manual (Unduh PDF). ' : '') + 'Bila diminta, masuk dengan akun email kantor.'));
+          : 'Membuka Outlook Web. Isi email sudah DISALIN (berformat): klik badan email lalu tekan Ctrl+V.' + (state.pdf ? ' Lampirkan surat PDF secara manual (Unduh PDF).' : ''));
         break;
       case 'outlook-com':
         btn.disabled = true;
@@ -531,7 +549,7 @@
           .then(function () { btn.disabled = false; });
         break;
       case 'copy-body':
-        copyText(m.body).then(function () { toast('Isi email disalin.'); }, function () { toast('Gagal menyalin. Pilih teks lalu tekan Ctrl+C.', true); });
+        copyRich(m.html, m.body).catch(function () { return copyText(m.body); }).then(function () { toast('Isi email disalin (berformat). Tempel dengan Ctrl+V di badan email.'); }, function () { toast('Gagal menyalin. Pilih teks lalu tekan Ctrl+C.', true); });
         break;
       case 'copy-subject':
         copyText(m.subject).then(function () { toast('Subjek disalin.'); }, function () { toast('Gagal menyalin.', true); });

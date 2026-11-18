@@ -251,3 +251,5 @@ details.help li { margin: .35rem 0; }
 .verify-result { margin: .6rem 0 0; font-weight: 600; }
 .verify-result.ok { color: #15623a; }
 .verify-result.bad { color: #b3261e; }
+
+.clip-ghost { position: fixed; left: -9999px; top: 0; opacity: 0; }
