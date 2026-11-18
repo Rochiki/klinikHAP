@@ -149,14 +149,85 @@
     return st;
   }
   /** Bangun PDF surat untuk kunjungan (null bila bukan istirahat sakit). */
+  /* tanda tangan dokter: gambar di kunjungan ini, atau yang disimpan untuk dokter tsb. */
+  function getSignature(visit, st) {
+    var url = visit.signature || ((st.signatures || {})[doctorName(visit.doctor)] || '');
+    var m = /^data:image\/jpeg;base64,(.+)$/.exec(url || '');
+    if (!m) return null;
+    var bin = atob(m[1]), b = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+    return { bytes: b, width: visit.signatureW || 600, height: visit.signatureH || 220 };
+  }
   function buildPdf(visit, lang) {
     if (visit.recommendation !== 'SICK' || !visit.suratNo) return Promise.resolve(null);
     var st = ensureSecret();
-    return getLogo().then(function (logo) { return SU.build(visit, st, { lang: lang, secret: st.verifySecret, logo: logo }); });
+    return getLogo().then(function (logo) {
+      return SU.build(visit, st, { lang: lang, secret: st.verifySecret, logo: logo, signature: getSignature(visit, st) });
+    });
   }
   function pdfBlobUrl(pdf) { return URL.createObjectURL(new Blob([pdf.bytes], { type: 'application/pdf' })); }
 
   function safeFile(s) { return String(s).replace(/[^A-Za-z0-9._-]+/g, '-'); }
+
+  /* ---------- tanda tangan digital dokter ---------- */
+  var sign = { drawing: false, dirty: false, last: null };
+  function signCtx() { return $('#signPad').getContext('2d'); }
+  function signReset() {
+    var c = $('#signPad'), g = signCtx();
+    g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+    g.strokeStyle = '#111'; g.lineWidth = 3.2; g.lineCap = 'round'; g.lineJoin = 'round';
+    sign.dirty = false;
+  }
+  function signPos(ev) {
+    var c = $('#signPad'), r = c.getBoundingClientRect();
+    return { x: (ev.clientX - r.left) * c.width / r.width, y: (ev.clientY - r.top) * c.height / r.height };
+  }
+  function openSign() {
+    var v = state.current; if (!v) return;
+    var name = doctorName(v.doctor), has = !!((S.getSettings().signatures || {})[name]) || !!v.signature;
+    $('#signSub').textContent = 'Dokter: ' + (name || '-') + '. Gambar tanda tangan di kotak dengan jari, pena, atau mouse.';
+    $('#signRemember').checked = false;
+    $('#signRemove').hidden = !has;
+    signReset();
+    $('#signDialog').showModal();
+  }
+  function saveSign() {
+    var v = state.current, c = $('#signPad');
+    if (!sign.dirty) { toast('Tanda tangan masih kosong. Gambar dulu di kotak.', true); return; }
+    var url = c.toDataURL('image/jpeg', 0.92), name = doctorName(v.doctor), patch = { signature: url, signatureW: c.width, signatureH: c.height };
+    S.updateVisit(v.id, patch); Object.assign(v, patch);
+    if ($('#signRemember').checked && name) {
+      var sg = Object.assign({}, S.getSettings().signatures); sg[name] = url; S.saveSettings({ signatures: sg });
+    }
+    $('#signDialog').close();
+    preparePdf(v, E.normLang(S.getSettings().emailLang));
+    toast('Tanda tangan dokter dipasang di surat.');
+  }
+  function removeSign() {
+    var v = state.current, name = doctorName(v.doctor);
+    S.updateVisit(v.id, { signature: '' }); v.signature = '';
+    var sg = Object.assign({}, S.getSettings().signatures); delete sg[name]; S.saveSettings({ signatures: sg });
+    $('#signDialog').close();
+    preparePdf(v, E.normLang(S.getSettings().emailLang));
+    toast('Tanda tangan dilepas dari surat.');
+  }
+  function initSignPad() {
+    var c = $('#signPad');
+    c.addEventListener('pointerdown', function (ev) {
+      ev.preventDefault(); c.setPointerCapture(ev.pointerId);
+      sign.drawing = true; sign.last = signPos(ev);
+      var g = signCtx(); g.beginPath(); g.arc(sign.last.x, sign.last.y, 1.6, 0, 7); g.fillStyle = '#111'; g.fill(); sign.dirty = true;
+    });
+    c.addEventListener('pointermove', function (ev) {
+      if (!sign.drawing) return;
+      var p = signPos(ev), g = signCtx();
+      g.beginPath(); g.moveTo(sign.last.x, sign.last.y); g.lineTo(p.x, p.y); g.stroke(); sign.last = p; sign.dirty = true;
+    });
+    ['pointerup', 'pointercancel'].forEach(function (t) { c.addEventListener(t, function () { sign.drawing = false; }); });
+    $('#signClear').addEventListener('click', signReset);
+    $('#signSave').addEventListener('click', saveSign);
+    $('#signRemove').addEventListener('click', removeSign);
+  }
 
   /* ---------- navigasi ---------- */
   function showView(name) {
@@ -418,8 +489,9 @@
       ? 'Buka tiap email di Outlook, periksa, lalu tekan Kirim di Outlook. Draf dapat dibuka lagi dari menu Riwayat.'
       : 'Buka tiap email di Outlook, periksa, lalu tekan Kirim di Outlook.';
     $('#btnFinishOutlook').hidden = !state.canOutlook;
-    $('#btnDone').textContent = state.canOutlook ? 'Tutup saja' : 'Selesai';
-    $('#btnDone').classList.toggle('primary', !state.canOutlook);
+    $('#btnFinishMailto').hidden = state.canOutlook;
+    $('#btnDone').textContent = 'Tutup saja';
+    $('#btnDone').classList.remove('primary');
     var dlg = $('#emailDialog');
     if (!dlg.open) dlg.showModal();
     $('#emailDialog .email-card .btn.primary').focus({ preventScroll: true });
@@ -510,12 +582,14 @@
     var v = state.current;
     switch (btn.dataset.action) {
       case 'mailto':
-        // mailto hanya bisa teks polos; agar tabel & link aktif terbawa, isi disalin berformat lalu ditempel (Ctrl+V)
-        var url = E.mailtoUrl({ to: m.to, cc: m.cc, subject: m.subject, body: '' });
-        copyRichQuiet(m);
+        // Windows menolak link mailto > ~2000 karakter; bila terlalu panjang, isi disalin ke clipboard
+        var url = E.mailtoUrl(m), long = url.length > MAILTO_MAX;
+        if (long) { url = E.mailtoUrl({ to: m.to, cc: m.cc, subject: m.subject, body: '' }); copyQuiet(m.body); }
         var a = el('a', { href: url }); document.body.appendChild(a); a.click(); a.remove();
         setOpened(role);
-        toast('Membuka Outlook... Isi email sudah DISALIN (berformat): klik badan email lalu tekan Ctrl+V.' + (state.pdf ? ' Lampirkan surat PDF secara manual.' : ''));
+        toast(long
+          ? 'Isi email panjang, jadi sudah DISALIN. Di Outlook klik badan email lalu tekan Ctrl+V.' + (state.pdf ? ' Lampirkan surat PDF secara manual.' : '')
+          : 'Membuka Outlook... ' + (state.pdf ? 'Lampirkan surat PDF secara manual (Unduh PDF). ' : '') + 'Bila tidak muncul, lihat "Tidak terbuka di Outlook?".');
         break;
       case 'outlook':
         var host = 'https://outlook.office.com/mail/deeplink/compose?';
@@ -525,13 +599,14 @@
           if (withBody) q.push('body=' + encodeURIComponent(m.body.replace(/\r?\n/g, '\r\n')));
           return q.join('&');
         };
-        var web = host + qs(false);
-        copyRichQuiet(m);
+        var web = host + qs(true), webLong = web.length > OUTLOOK_WEB_MAX;
+        if (webLong) { web = host + qs(false); copyQuiet(m.body); }
         var w = window.open(web, '_blank', 'noopener');
         setOpened(role);
-        toast(w === null && window.__calls === undefined
+        toast(w === null && !webLong && window.__calls === undefined
           ? 'Jendela Outlook Web diblokir browser. Izinkan pop-up untuk halaman ini lalu klik lagi.'
-          : 'Membuka Outlook Web. Isi email sudah DISALIN (berformat): klik badan email lalu tekan Ctrl+V.' + (state.pdf ? ' Lampirkan surat PDF secara manual (Unduh PDF).' : ''));
+          : (webLong ? 'Isi email panjang, jadi sudah DISALIN. Di Outlook Web klik badan email lalu tekan Ctrl+V.'
+            : 'Membuka Outlook Web. ' + (state.pdf ? 'Lampirkan surat PDF secara manual (Unduh PDF). ' : '') + 'Bila diminta, masuk dengan akun email kantor.'));
         break;
       case 'outlook-com':
         btn.disabled = true;
@@ -601,6 +676,30 @@
       else { $('#emailDialog').close(); toast('Draf dibuka di Outlook classic' + (state.pdf ? ' dengan surat PDF terlampir' : '') + '. Periksa, lalu tekan Kirim di tiap email.'); }
     }).catch(function () { toast('Server lokal tidak dapat dihubungi. Gunakan Unduh .eml.', true); })
       .then(function () { btn.disabled = false; btn.textContent = old; });
+  }
+
+  /* Selesai (tanpa server lokal): buka kedua email berurutan lewat mailto dengan isi terisi */
+  function finishViaMailto() {
+    var v = state.current;
+    var todo = $$('#emailGrid .email-card').filter(function (c) {
+      var role = c.dataset.role; return !((v.emailOpened && v.emailOpened[role]) || (v.emailStatus && v.emailStatus[role]));
+    });
+    if (!todo.length) { $('#emailDialog').close(); return; }
+    var longOnes = 0;
+    todo.forEach(function (card, i) {
+      setTimeout(function () {
+        var m = readCard(card), role = card.dataset.role;
+        var url = E.mailtoUrl(m);
+        if (url.length > MAILTO_MAX) { longOnes++; url = E.mailtoUrl({ to: m.to, cc: m.cc, subject: m.subject, body: '' }); copyQuiet(m.body); }
+        var a = el('a', { href: url }); document.body.appendChild(a); a.click(); a.remove();
+        setOpened(role);
+        if (i === todo.length - 1) {
+          $('#emailDialog').close();
+          toast((longOnes ? 'Isi email panjang, sudah DISALIN: di Outlook klik badan email lalu Ctrl+V. ' : '') + 'Email dibuka di Outlook.' +
+            (state.pdf ? ' Lampirkan surat PDF (Unduh PDF) di email.' : '') + ' Periksa, lalu tekan Kirim.');
+        }
+      }, i * 1200);
+    });
   }
 
   function sendViaServer(btn, role, m) {
@@ -997,6 +1096,11 @@
     $('#btnExport').addEventListener('click', exportCsv);
     $('#btnExportXlsx').addEventListener('click', exportXlsx);
     $('#btnFinishOutlook').addEventListener('click', finishToOutlook);
+    $('#btnFinishMailto').addEventListener('click', finishViaMailto);
+    initSignPad();
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) { // agar bisa dipasang sebagai aplikasi & jalan tanpa internet
+      navigator.serviceWorker.register('sw.js').catch(function () { /* tidak wajib */ });
+    }
     $('#btnVerify').addEventListener('click', runVerify);
     $('#vCode').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') runVerify(); });
     $('#s-logo').addEventListener('change', onLogoFile);
@@ -1004,6 +1108,7 @@
     $('#suratBar').addEventListener('click', function (ev) {
       var b = ev.target.closest('[data-surat]');
       if (!b) return;
+      if (b.dataset.surat === 'sign') { openSign(); return; }
       withPdf(function (pdf) {
         if (!pdf) { toast('Surat belum siap atau gagal dibuat.', true); return; }
         if (b.dataset.surat === 'view') window.open(pdfBlobUrl(pdf), '_blank');

@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Klinik HAP - Pencatatan Kunjungan</title>
   <link rel="stylesheet" href="css/style.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#23272e">
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 </head>
 <body>
   <header class="topbar">
@@ -345,6 +348,7 @@
         <span class="muted small" id="suratFile"></span>
       </div>
       <div class="btn-row">
+        <button type="button" class="btn small primary" data-surat="sign" id="btnSign">Tanda Tangan Dokter</button>
         <button type="button" class="btn small" data-surat="view">Lihat PDF</button>
         <button type="button" class="btn small" data-surat="download">Unduh PDF</button>
       </div>
@@ -365,7 +369,8 @@
       <p class="muted small" id="mailNote">Buka tiap email di Outlook, periksa, lalu tekan Kirim di Outlook.</p>
       <div class="btn-row">
         <button type="button" class="btn primary" id="btnFinishOutlook" hidden>Selesai &amp; Buka Kedua Email di Outlook Classic</button>
-        <button type="button" class="btn primary" data-close id="btnDone">Selesai</button>
+        <button type="button" class="btn primary" id="btnFinishMailto">Selesai &amp; Buka Kedua Email</button>
+        <button type="button" class="btn" data-close id="btnDone">Tutup saja</button>
       </div>
     </div>
   </dialog>
@@ -404,6 +409,25 @@
     <div class="dlg-foot">
       <button type="button" class="btn" id="detailEmails">Lihat Draf Email</button>
       <button type="button" class="btn primary" data-close>Tutup</button>
+    </div>
+  </dialog>
+
+  <!-- ===================== DIALOG TANDA TANGAN ===================== -->
+  <dialog id="signDialog" aria-labelledby="signTitle">
+    <div class="dlg-head">
+      <div><h2 id="signTitle">Tanda Tangan Dokter</h2><p class="muted" id="signSub">Gambar tanda tangan di kotak dengan jari, pena, atau mouse.</p></div>
+      <button type="button" class="icon-btn" data-close aria-label="Tutup">&times;</button>
+    </div>
+    <div class="dlg-body">
+      <canvas id="signPad" width="600" height="220" aria-label="Kotak tanda tangan"></canvas>
+      <label class="check"><input type="checkbox" id="signRemember"> Simpan untuk dokter ini (dipakai otomatis di surat berikutnya)</label>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn" id="signClear">Hapus Gambar</button>
+      <div class="btn-row">
+        <button type="button" class="btn" id="signRemove" hidden>Lepas Tanda Tangan</button>
+        <button type="button" class="btn primary" id="signSave">Simpan ke Surat</button>
+      </div>
     </div>
   </dialog>
 

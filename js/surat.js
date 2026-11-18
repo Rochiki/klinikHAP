@@ -73,7 +73,7 @@
   function fileName(v) { return 'Surat-Sakit-' + String(v.suratNo).replace(/[^A-Za-z0-9]+/g, '-') + '.pdf'; }
 
   /**
-   * Bangun PDF. opts: { lang, secret, logo:{bytes,width,height}|null, now }.
+   * Bangun PDF. opts: { lang, secret, logo:{bytes,width,height}|null, signature:{bytes,width,height}|null, now }.
    * Mengembalikan { bytes, filename, code, payload }.
    */
   function build(v, settings, opts) {
@@ -149,7 +149,11 @@
     var qy = y + 8;
     d.rect(cx - qsize / 2 - 5, qy - 5, qsize + 10, qsize + 10, { fill: 'FFFFFF', stroke: 'D5D9DF', lw: 0.6 });
     d.qr(function (r, c) { return qr.isDark(r, c); }, qr.getModuleCount(), cx - qsize / 2, qy, qsize);
-    var dy = qy + qsize + 24;
+    var sigH = 40, dy = qy + qsize + 24 + (opts.signature ? sigH + 6 : 0);
+    if (opts.signature) { // tanda tangan digital dokter (gambar), di atas nama
+      var sw = sigH * opts.signature.width / opts.signature.height;
+      d.image(opts.signature, cx - sw / 2, qy + qsize + 14, sw, sigH);
+    }
     d.text(cx, dy, v.doctor || '-', { size: 10.5, bold: true, align: 'center', underline: true });
     d.text(cx, dy + 13, t.doctorRole, { size: 9.5, align: 'center' });
     if (v.doctorSip) d.text(cx, dy + 25, t.sip + ' : ' + v.doctorSip, { size: 8.5, align: 'center', color: GREY });

@@ -92,7 +92,7 @@ function openInOutlookClassic(mail) {
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon'
+  '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json'
 };
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
@@ -206,7 +206,7 @@ function createServer(mailer, opts) {
       let rel;
       try { rel = decodeURIComponent(url.pathname); } catch (e) { rel = ''; }
       if (rel === '/') rel = '/index.html';
-      const allowed = rel === '/index.html' || /^\/(css|js|img)\/(?:vendor\/)?[^/]+$/.test(rel);
+      const allowed = rel === '/index.html' || rel === '/manifest.webmanifest' || rel === '/sw.js' || /^\/(css|js|img)\/(?:vendor\/)?[^/]+$/.test(rel);
       const file = path.join(ROOT, rel);
       if (!allowed || !file.startsWith(ROOT + path.sep) || !MIME[path.extname(file).toLowerCase()]) {
         res.writeHead(404, SECURITY_HEADERS); return res.end('Tidak ditemukan');

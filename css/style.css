@@ -253,3 +253,7 @@ details.help li { margin: .35rem 0; }
 .verify-result.bad { color: #b3261e; }
 
 .clip-ghost { position: fixed; left: -9999px; top: 0; opacity: 0; }
+
+dialog#signDialog { width: min(680px, 96vw); }
+#signPad { width: 100%; height: auto; aspect-ratio: 600 / 220; background: #fff; border: 2px dashed #b9c0ca; border-radius: 10px; touch-action: none; cursor: crosshair; display: block; }
+.check { display: flex; gap: .5rem; align-items: center; margin-top: .7rem; font-size: .93rem; }

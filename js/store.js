@@ -23,7 +23,7 @@
     address: 'Jl. Pulo Kambing II Kav. I-II No. 33, Kawasan Industri Pulogadung, Jakarta Timur 13930',
     phone: '(021) 461 1688',
     verifyUrl: '',
-    verifySecret: '',
+    verifySecret: '', signatures: {},
     ccAlways: '',
     emailLang: 'id',
     departments: ['HRGA', 'QSHE', 'Finance & Accounting', 'Procurement', 'Sales & Marketing',

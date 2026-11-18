@@ -107,3 +107,10 @@ npm test
 ```
 Menguji isi email (termasuk bahwa email atasan tidak membocorkan diagnosis), nomor surat, penyimpanan,
 cadangan, dan server lokal.
+
+
+## Tanda tangan digital dokter
+Di jendela email, tombol **Tanda Tangan Dokter** membuka kotak gambar. Dokter menggambar tanda tangan dengan jari, pena, atau mouse, lalu **Simpan ke Surat**. Gambar dipasang di atas nama dokter pada surat PDF. Centang *Simpan untuk dokter ini* bila ingin dipakai otomatis di surat berikutnya (disimpan di perangkat ini saja).
+
+## Dipasang sebagai aplikasi (PWA)
+Bila dibuka lewat alamat https (misalnya GitHub Pages `https://rochiki.github.io/klinikHAP/`) atau lewat server lokal, Chrome/Edge menampilkan ikon **Pasang** di kolom alamat (atau menu > *Install Klinik HAP*). Aplikasi lalu punya ikon sendiri, jendela sendiri, dan tetap bisa dibuka tanpa internet. Data tersimpan per alamat (origin): riwayat yang dicatat dari `file://` tidak otomatis ada di versi terpasang, gunakan Cadangan lalu Pulihkan di Pengaturan. Tombol Outlook Classic (COM) tetap hanya tersedia lewat `Jalankan-Klinik.bat`.

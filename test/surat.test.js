@@ -61,3 +61,12 @@ test('.eml dengan lampiran PDF: multipart/mixed berisi alternatif + application/
   assert.equal(Buffer.from(m[1].replace(/\s/g, ''), 'base64').slice(0, 5).toString(), '%PDF-');
   assert.ok(!/multipart\/mixed/.test(E.toEml({ to: 'a@x.id', subject: 'Uji', body: 'Isi' })));
 });
+
+test('tanda tangan digital dokter: gambar JPEG ikut di PDF di atas nama dokter', () => {
+  const jpeg = new Uint8Array(Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAEAAgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD3+iiigD//2Q==', 'base64'));
+  const v = { visitAt: new Date(2026, 10, 18, 10, 12).toISOString(), nik: 'T1', name: 'Rosiana R', dept: 'QSHE', doctor: 'dr. Indah', recommendation: 'SICK', restDays: 2, suratNo: '001/SKS/QSHE-HAP/XI/2026' };
+  const a = S.build(v, {}, { lang: 'id', secret: 'x', logo: null });
+  const b = S.build(v, {}, { lang: 'id', secret: 'x', logo: null, signature: { bytes: jpeg, width: 8, height: 4 } });
+  const cnt = (r) => Buffer.from(r.bytes).toString('latin1').split('/Subtype /Image').length - 1;
+  assert.equal(cnt(a), 0); assert.equal(cnt(b), 1); assert.equal(a.code, b.code);
+});
