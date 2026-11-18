@@ -1,0 +1,15 @@
+{
+  "name": "klinikhap",
+  "version": "1.0.0",
+  "description": "Aplikasi pencatatan kunjungan klinik perusahaan dengan draf/pengiriman email notifikasi otomatis.",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "nodemailer": "^6.9.16"
+  }
+}

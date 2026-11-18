@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Klinik HAP - Pencatatan Kunjungan</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span id="brandLogo" class="brand-logo" hidden></span>
+      <div>
+        <h1 id="clinicTitle">Klinik HAP</h1>
+        <p>Pencatatan Kunjungan Klinik Perusahaan</p>
+      </div>
+    </div>
+    <nav class="tabs" aria-label="Menu utama">
+      <button type="button" class="tab is-active" data-view="new">Kunjungan Baru</button>
+      <button type="button" class="tab" data-view="history">Riwayat <span class="count" id="historyCount">0</span></button>
+      <button type="button" class="tab" data-view="settings">Pengaturan</button>
+    </nav>
+    <div class="clock" id="clock" aria-hidden="true"></div>
+  </header>
+
+  <div id="storageWarning" class="banner banner-warn" hidden>
+    Penyimpanan browser tidak tersedia (mode privat/diblokir). Data hanya bertahan selama halaman ini terbuka.
+    Gunakan jendela biasa atau unduh cadangan di menu Pengaturan.
+  </div>
+
+  <main>
+    <!-- ===================== KUNJUNGAN BARU ===================== -->
+    <section id="view-new" class="view">
+      <form id="visitForm" novalidate autocomplete="off">
+        <div class="grid-2">
+          <fieldset class="card">
+            <legend>1. Data Pekerja</legend>
+            <div class="field">
+              <label for="f-nik">NIK <span class="req">*</span></label>
+              <input id="f-nik" name="nik" type="text" inputmode="numeric" maxlength="30" required>
+              <p class="field-hint" id="nikHint"></p>
+              <p class="field-error" data-error-for="nik" role="alert"></p>
+            </div>
+            <div class="field">
+              <label for="f-name">Nama Pekerja <span class="req">*</span></label>
+              <input id="f-name" name="name" type="text" maxlength="120" required>
+              <p class="field-error" data-error-for="name" role="alert"></p>
+            </div>
+            <div class="field">
+              <label for="f-dept">Departemen / Divisi <span class="req">*</span></label>
+              <input id="f-dept" name="dept" type="text" list="deptList" maxlength="80" placeholder="Pilih atau ketik" required>
+              <datalist id="deptList"></datalist>
+              <p class="field-error" data-error-for="dept" role="alert"></p>
+            </div>
+            <div class="field">
+              <label for="f-workerEmail">Email Pekerja</label>
+              <input id="f-workerEmail" name="workerEmail" type="email" maxlength="120" placeholder="nama@perusahaan.co.id">
+              <p class="field-error" data-error-for="workerEmail" role="alert"></p>
+            </div>
+            <div class="row-2">
+              <div class="field">
+                <label for="f-supervisorName">Nama Atasan</label>
+                <input id="f-supervisorName" name="supervisorName" type="text" maxlength="120">
+              </div>
+              <div class="field">
+                <label for="f-supervisorEmail">Email Atasan</label>
+                <input id="f-supervisorEmail" name="supervisorEmail" type="email" maxlength="120">
+                <p class="field-error" data-error-for="supervisorEmail" role="alert"></p>
+              </div>
+            </div>
+            <div class="field">
+              <label for="f-hrdEmail">Email HRD <span class="opt">(opsional, masuk CC email atasan)</span></label>
+              <input id="f-hrdEmail" name="hrdEmail" type="text" maxlength="200" placeholder="pisahkan dengan koma bila lebih dari satu">
+              <p class="field-error" data-error-for="hrdEmail" role="alert"></p>
+            </div>
+          </fieldset>
+
+          <fieldset class="card">
+            <legend>2. Pemeriksaan</legend>
+            <div class="row-2">
+              <div class="field">
+                <label for="f-visitAt">Jam masuk</label>
+                <input id="f-visitAt" name="visitAt" type="datetime-local" readonly>
+                <p class="field-error" data-error-for="visitAt" role="alert"></p>
+              </div>
+              <div class="field">
+                <label for="f-checkOutAt">Jam keluar</label>
+                <input id="f-checkOutAt" name="checkOutAt" type="datetime-local" readonly>
+                <p class="field-error" data-error-for="checkOutAt" role="alert"></p>
+              </div>
+            </div>
+            <label class="check">
+              <input type="checkbox" id="manualTime">
+              <span>Ubah waktu secara manual</span>
+            </label>
+            <p class="field-hint">Jam masuk terisi saat form dibuka; jam keluar terisi otomatis saat disimpan.</p>
+
+            <div class="field">
+              <label for="f-doctor">Dokter Pemeriksa <span class="req">*</span></label>
+              <input id="f-doctor" name="doctor" type="text" list="doctorList" maxlength="120" placeholder="mis. dr. Nama Dokter">
+              <datalist id="doctorList"></datalist>
+              <p class="field-error" data-error-for="doctor" role="alert"></p>
+            </div>
+            <div class="field">
+              <label for="f-complaint">Keluhan / Diagnosa <span class="req">*</span></label>
+              <textarea id="f-complaint" name="complaint" rows="3" maxlength="1500" required></textarea>
+              <p class="field-error" data-error-for="complaint" role="alert"></p>
+            </div>
+            <div class="field">
+              <label for="f-medications">Obat yang Diresepkan <span class="opt">(satu obat per baris)</span></label>
+              <textarea id="f-medications" name="medications" rows="3" maxlength="1500" placeholder="Paracetamol 500 mg - 3x1 sesudah makan&#10;Vitamin C 500 mg - 1x1"></textarea>
+            </div>
+          </fieldset>
+        </div>
+
+        <fieldset class="card">
+          <legend>3. Rekomendasi Medis <span class="req">*</span></legend>
+          <div class="reco" role="radiogroup" aria-label="Rekomendasi medis">
+            <label class="reco-card reco-fit">
+              <input type="radio" name="recommendation" value="FIT">
+              <span class="reco-title">Kembali Bekerja</span>
+              <span class="reco-sub">Fit to Work</span>
+            </label>
+            <label class="reco-card reco-sick">
+              <input type="radio" name="recommendation" value="SICK">
+              <span class="reco-title">Istirahat Sakit</span>
+              <span class="reco-sub">Sick Leave</span>
+            </label>
+            <label class="reco-card reco-refer">
+              <input type="radio" name="recommendation" value="REFER">
+              <span class="reco-title">Rujukan Lanjutan</span>
+              <span class="reco-sub">Faskes rujukan</span>
+            </label>
+          </div>
+          <p class="field-error" data-error-for="recommendation" role="alert"></p>
+
+          <div id="restFields" class="row-3" hidden>
+            <div class="field">
+              <label for="f-restDays">Durasi istirahat (hari) <span class="req">*</span></label>
+              <input id="f-restDays" name="restDays" type="number" min="1" max="30" step="1" inputmode="numeric">
+              <div class="chips" aria-label="Pilihan cepat">
+                <button type="button" class="chip" data-days="1">1</button>
+                <button type="button" class="chip" data-days="2">2</button>
+                <button type="button" class="chip" data-days="3">3</button>
+              </div>
+              <p class="field-error" data-error-for="restDays" role="alert"></p>
+            </div>
+            <div class="field">
+              <label for="f-restStart">Mulai istirahat</label>
+              <input id="f-restStart" name="restStart" type="date">
+              <p class="field-hint">Kosong = tanggal kunjungan.</p>
+            </div>
+            <div class="field"><p class="rest-preview" id="restPreview"></p></div>
+          </div>
+
+          <div id="referFields" hidden>
+            <div class="field">
+              <label for="f-referralTo">Tujuan rujukan <span class="opt">(opsional; tidak dikirim ke atasan)</span></label>
+              <input id="f-referralTo" name="referralTo" type="text" maxlength="160" placeholder="Nama RS / dokter spesialis">
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="actionbar">
+          <button type="button" class="btn" id="btnReset">Kosongkan Form</button>
+          <button type="submit" class="btn primary" id="btnSubmit">Simpan &amp; Kirim Notifikasi</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ===================== RIWAYAT ===================== -->
+    <section id="view-history" class="view" hidden>
+      <div class="stats" id="stats"></div>
+      <div class="card">
+        <div class="toolbar">
+          <input id="hSearch" type="search" placeholder="Cari nama, NIK, departemen, no. surat..." aria-label="Cari">
+          <select id="hReco" aria-label="Filter rekomendasi">
+            <option value="">Semua rekomendasi</option>
+            <option value="FIT">Fit to Work</option>
+            <option value="SICK">Istirahat Sakit</option>
+            <option value="REFER">Rujukan Lanjutan</option>
+          </select>
+          <label class="inline">Dari <input id="hFrom" type="date"></label>
+          <label class="inline">Sampai <input id="hTo" type="date"></label>
+          <button type="button" class="btn" id="btnExport">Unduh CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Waktu</th><th>No. Surat</th><th>Pekerja</th><th>Departemen</th>
+                <th>Rekomendasi</th><th>Email</th><th class="right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+        <p class="empty" id="historyEmpty" hidden>Belum ada kunjungan yang cocok.</p>
+      </div>
+    </section>
+
+    <!-- ===================== PENGATURAN ===================== -->
+    <section id="view-settings" class="view" hidden>
+      <form id="settingsForm" class="card" novalidate autocomplete="off">
+        <h2>Pengaturan Klinik</h2>
+        <div class="grid-2">
+          <div class="field">
+            <label for="s-clinicName">Nama klinik (tampil di email)</label>
+            <input id="s-clinicName" name="clinicName" type="text" maxlength="80">
+          </div>
+          <div class="field">
+            <label for="s-nurseName">Nama perawat / petugas (tanda tangan email)</label>
+            <input id="s-nurseName" name="nurseName" type="text" maxlength="80">
+          </div>
+          <div class="field">
+            <label for="s-doctors">Daftar dokter pemeriksa <span class="opt">(satu per baris)</span></label>
+            <textarea id="s-doctors" name="doctors" rows="3"></textarea>
+          </div>
+          <div class="field">
+            <label for="s-defaultDoctor">Dokter default</label>
+            <input id="s-defaultDoctor" name="defaultDoctor" type="text" maxlength="120">
+          </div>
+          <div class="field">
+            <label for="s-suratPrefix">Awalan nomor surat</label>
+            <input id="s-suratPrefix" name="suratPrefix" type="text" maxlength="30">
+            <p class="field-hint">Contoh hasil: <strong id="suratExample"></strong></p>
+            <p class="field-error" data-error-for="suratPrefix" role="alert"></p>
+          </div>
+          <div class="field">
+            <label for="s-ccAlways">CC otomatis <span class="opt">(opsional, mis. arsip klinik)</span></label>
+            <input id="s-ccAlways" name="ccAlways" type="text" maxlength="200">
+            <p class="field-error" data-error-for="ccAlways" role="alert"></p>
+          </div>
+          <div class="field span-2">
+            <label for="s-departments">Daftar departemen <span class="opt">(satu per baris)</span></label>
+            <textarea id="s-departments" name="departments" rows="6"></textarea>
+          </div>
+        </div>
+        <div class="actionbar inline-actions">
+          <button type="submit" class="btn primary">Simpan Pengaturan</button>
+        </div>
+      </form>
+
+      <div class="card">
+        <h2>Data &amp; Cadangan</h2>
+        <p class="muted">Data kunjungan tersimpan di browser laptop ini (<span id="storageSize">0 KB</span>).
+          Menghapus data browser akan menghapus riwayat, jadi unduh cadangan secara berkala.</p>
+        <div class="btn-row">
+          <button type="button" class="btn" id="btnBackup">Unduh Cadangan (.json)</button>
+          <label class="btn" for="restoreFile">Pulihkan dari Cadangan</label>
+          <input id="restoreFile" type="file" accept="application/json,.json" hidden>
+          <button type="button" class="btn danger" id="btnWipe">Hapus Semua Data</button>
+        </div>
+        <p class="muted small" id="serverStatus"></p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===================== DIALOG EMAIL ===================== -->
+  <dialog id="emailDialog" aria-labelledby="emailDlgTitle">
+    <div class="dlg-head">
+      <div>
+        <h2 id="emailDlgTitle">Draf Email Notifikasi</h2>
+        <p id="emailDlgSub" class="muted"></p>
+      </div>
+      <button type="button" class="icon-btn" data-close aria-label="Tutup">&times;</button>
+    </div>
+    <div class="dlg-banner" id="emailBanner" hidden>
+      Data kunjungan tersimpan. No. Surat Keterangan: <strong id="dlgSuratNo"></strong>
+    </div>
+    <div class="dlg-body email-grid" id="emailGrid"></div>
+    <div class="dlg-foot">
+      <p class="muted small" id="mailNote">Buka tiap email di Outlook, periksa, lalu tekan Kirim di Outlook.</p>
+      <button type="button" class="btn primary" data-close>Selesai</button>
+    </div>
+  </dialog>
+
+  <template id="tplEmailCard">
+    <article class="email-card">
+      <header>
+        <h3></h3>
+        <span class="badge" data-f="status"></span>
+      </header>
+      <div class="field"><label>Kepada</label><input data-f="to" type="text"></div>
+      <div class="field"><label>CC</label><input data-f="cc" type="text"></div>
+      <div class="field"><label>Subjek</label><input data-f="subject" type="text"></div>
+      <div class="field"><label>Isi email</label><textarea data-f="body" rows="17" spellcheck="false"></textarea></div>
+      <p class="field-hint warn" data-f="hint" hidden></p>
+      <div class="btn-row">
+        <button type="button" class="btn primary" data-action="mailto">Buka di Outlook (aplikasi)</button>
+        <button type="button" class="btn primary" data-action="outlook">Buka di Outlook Web</button>
+        <button type="button" class="btn" data-action="copy-body">Salin Isi</button>
+        <button type="button" class="btn" data-action="copy-subject">Salin Subjek</button>
+        <button type="button" class="btn" data-action="eml">Unduh .eml (buka di Outlook)</button>
+        <button type="button" class="btn" data-action="send" hidden>Kirim Langsung (SMTP)</button>
+        <button type="button" class="btn ghost" data-action="mark">Tandai Sudah Terkirim</button>
+      </div>
+    </article>
+  </template>
+
+  <!-- ===================== DIALOG DETAIL ===================== -->
+  <dialog id="detailDialog" aria-labelledby="detailTitle">
+    <div class="dlg-head">
+      <div><h2 id="detailTitle">Detail Kunjungan</h2><p id="detailSub" class="muted"></p></div>
+      <button type="button" class="icon-btn" data-close aria-label="Tutup">&times;</button>
+    </div>
+    <dl class="dlg-body detail" id="detailBody"></dl>
+    <div class="dlg-foot">
+      <button type="button" class="btn" id="detailEmails">Lihat Draf Email</button>
+      <button type="button" class="btn primary" data-close>Tutup</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" popover="manual" role="status" aria-live="polite"></div>
+
+  <script src="js/email.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
