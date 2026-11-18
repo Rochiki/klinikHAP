@@ -265,3 +265,5 @@ dialog#signDialog { width: min(680px, 96vw); }
 dialog#installDialog { max-width: 34rem; border: 0; border-radius: 12px; padding: 1.25rem 1.5rem; }
 dialog#installDialog::backdrop { background: rgba(0, 0, 0, .45); }
 dialog#installDialog li { margin-bottom: .5rem; line-height: 1.45; }
+.install-bar .install-why { display: block; margin-top: .2rem; font-size: .9rem; color: #7a3d00; }
+.install-bar a.btn { text-decoration: none; display: inline-block; }

@@ -712,12 +712,20 @@
   /* Selesai (tanpa server lokal): buka kedua email berurutan lewat mailto dengan isi terisi */
   var installEvt = null;
   function initInstall() {
-    var bar = $('#installBar');
+    var bar = $('#installBar'), why = $('#installWhy');
     var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone;
     var dismissed = false;
     try { dismissed = localStorage.getItem('klinikhap.installDismissed') === '1'; } catch (e) { /* abaikan */ }
-    if (standalone || dismissed || !/^https?:$/.test(location.protocol)) return;
+    if (standalone || dismissed) return;
     bar.hidden = false; // selalu tampil sampai dipasang atau ditutup
+    var secure = /^https?:$/.test(location.protocol) && (window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+    if (!secure) {
+      why.hidden = false;
+      why.textContent = location.protocol === 'file:'
+        ? 'Halaman ini dibuka dari FILE di komputer, jadi Chrome tidak menyediakan menu Instal. Buka alamat web resmi lewat tombol di kanan.'
+        : 'Alamat ini bukan https, jadi Chrome tidak menyediakan menu Instal. Buka alamat web resmi lewat tombol di kanan.';
+      $('#btnInstallOpen').hidden = false; $('#btnInstall').hidden = true;
+    }
     window.addEventListener('beforeinstallprompt', function (ev) { ev.preventDefault(); installEvt = ev; });
     window.addEventListener('appinstalled', function () { bar.hidden = true; toast('Aplikasi terpasang.'); });
     $('#btnInstall').addEventListener('click', function () {
