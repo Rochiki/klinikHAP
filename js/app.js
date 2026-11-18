@@ -326,6 +326,7 @@
     var o = {};
     ['to', 'cc', 'subject', 'body'].forEach(function (f) { o[f] = $('[data-f="' + f + '"]', card).value; });
     o.to = E.splitEmails(o.to).join(','); o.cc = E.splitEmails(o.cc).join(',');
+    o.html = E.toHtml(o.body);
     return o;
   }
   function setOpened(role) {
@@ -380,7 +381,7 @@
         btn.disabled = true;
         fetch('api/outlook', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: m.to, cc: m.cc, subject: m.subject, text: m.body })
+          body: JSON.stringify({ to: m.to, cc: m.cc, subject: m.subject, text: m.body, html: m.html })
         }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok && j.ok, j: j }; }); })
           .then(function (res) {
             if (res.ok) { setOpened(role); toast('Draf dibuka di Outlook. Periksa, lalu tekan Kirim di Outlook.'); }
@@ -414,7 +415,7 @@
     var old = btn.textContent; btn.textContent = 'Mengirim...';
     fetch('api/send', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: m.to, cc: m.cc, subject: m.subject, text: m.body })
+      body: JSON.stringify({ to: m.to, cc: m.cc, subject: m.subject, text: m.body, html: m.html })
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok && j.ok, j: j }; });
     }).then(function (res) {

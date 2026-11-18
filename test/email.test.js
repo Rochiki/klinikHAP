@@ -151,3 +151,38 @@ test('tanda tangan: Best Regards + nama + jabatan + perusahaan (bawaan & dapat d
   const custom = E.buildEmails(visit({ nurse: 'Ns. Lain' }), { nurseTitle: 'Perawat', companyName: 'PT X' });
   assert.match(custom.boss.body, /Best Regards,\nNs\. Lain\nPerawat\nPT X\n/);
 });
+
+test('pembuka email pekerja: tanpa NIK, hanya nama dan departemen', () => {
+  const b = E.buildEmails(visit(), settings).worker.body;
+  assert.ok(b.startsWith('Kepada Yth.\nBapak/Ibu Budi Santoso\nService\n\nTerima kasih'), b.slice(0, 120));
+  assert.ok(!/NIK/.test(b.split('\n\n')[0]), 'NIK tidak boleh ada di pembuka');
+  // email atasan tetap memuat NIK sebagai data identitas karyawan
+  assert.match(E.buildEmails(visit(), settings).boss.body, /NIK: 0012345/);
+});
+
+test('toHtml: URL menjadi tautan yang dapat diklik, karakter khusus di-escape', () => {
+  const h = E.toHtml(FOOTER + '\n\nA & B <script>x</script>\n  - butir "satu"');
+  assert.match(h, /<a href="https:\/\/s\.id\/klinikHAP">https:\/\/s\.id\/klinikHAP<\/a>/);
+  assert.ok(!/<script>/.test(h));
+  assert.match(h, /A &amp; B &lt;script&gt;/);
+  assert.match(h, /&nbsp;&nbsp;- butir &quot;satu&quot;/);
+  // titik/tanda baca di akhir URL tidak ikut tautan
+  assert.match(E.toHtml('Lihat https://contoh.id/x.'), /<a href="https:\/\/contoh\.id\/x">https:\/\/contoh\.id\/x<\/a>\./);
+  // kedua email: tautan umpan balik hidup
+  const m = E.buildEmails(visit(), settings);
+  for (const k of ['worker', 'boss']) assert.match(E.toHtml(m[k].body), /<a href="https:\/\/s\.id\/klinikHAP">/);
+});
+
+test('.eml dengan HTML: multipart/alternative berisi teks dan HTML yang dapat didekode', () => {
+  const body = 'Halo \u2013 tes\n' + FOOTER;
+  const html = E.toHtml(body);
+  const eml = E.toEml({ to: 'a@b.co', subject: 'Uji', body, html });
+  assert.match(eml, /Content-Type: multipart\/alternative; boundary="(=_klinikhap_[a-z0-9]+)"/);
+  const bd = /boundary="([^"]+)"/.exec(eml)[1];
+  const parts = eml.split('--' + bd).slice(1, -1);
+  assert.equal(parts.length, 2);
+  const dec = (p) => Buffer.from(p.split('\r\n\r\n')[1].replace(/\r\n/g, ''), 'base64').toString('utf8');
+  assert.match(parts[0], /Content-Type: text\/plain/); assert.equal(dec(parts[0]), body.replace(/\n/g, '\r\n'));
+  assert.match(parts[1], /Content-Type: text\/html/); assert.equal(dec(parts[1]), html);
+  assert.ok(eml.trimEnd().endsWith('--' + bd + '--'));
+});

@@ -18,6 +18,7 @@ menyiapkan **dua email** (pekerja dan atasan/HRD) yang **dibuka dulu di Outlook*
 | Email 1 (Pekerja) | Ringkasan kunjungan, dokter, rekomendasi; untuk istirahat sakit, info Surat Keterangan Sakit telah diserahkan di klinik |
 | Email 2 (Atasan/HRD) | Nama, NIK, dept, jam masuk-keluar, status kerja, info surat. **Tanpa diagnosis, obat, maupun tujuan rujukan** |
 | Tanda tangan | `Best Regards, Eny Rohmatul Fitri, Perawat Perusahaan, PT Hexindo Adiperkasa Tbk` (dapat diubah di Pengaturan) |
+| Link hidup | Email dikirim berformat HTML (lewat **Outlook Classic langsung**, **.eml**, atau SMTP) sehingga `https://s.id/klinikHAP` dapat diklik. Tombol `mailto` hanya bisa teks polos |
 | Footer kedua email | `Punya keluhan atau saran pengembangan layanan? Silakan input melalui https://s.id/klinikHAP` |
 | Outlook Classic | Per email: **Buka di Outlook Classic** (langsung, lewat `Jalankan-Klinik.bat`), **Unduh .eml** (terbuka di Outlook sebagai draf siap kirim), **mailto**, atau Outlook Web |
 | Riwayat | Pencarian, filter, ringkasan harian, detail, buka ulang draf email, hapus, unduh CSV |

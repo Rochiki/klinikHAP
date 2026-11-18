@@ -84,9 +84,10 @@ test('/api/outlook: memanggil pembuka Outlook dengan data bersih; tolak CSRF & i
   const post2 = (b, h) => fetch(base + '/api/outlook', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, h), body: JSON.stringify(b) });
   try {
     assert.equal((await (await fetch(base + '/api/health')).json()).canOutlook, true);
-    const r = await post2({ to: 'a@x.id, b@x.id', cc: 'c@x.id', subject: 'Uji', text: 'Isi \u2013 \"kutip\" $(rm) `x`' });
+    const r = await post2({ to: 'a@x.id, b@x.id', cc: 'c@x.id', subject: 'Uji', text: 'Isi \u2013 \"kutip\" $(rm) `x`', html: '<p><a href="https://s.id/klinikHAP">x</a></p>' });
     assert.equal(r.status, 200);
-    assert.deepEqual(calls[0], { to: 'a@x.id;b@x.id', cc: 'c@x.id', subject: 'Uji', text: 'Isi \u2013 \"kutip\" $(rm) `x`' });
+    assert.deepEqual(calls[0], { to: 'a@x.id;b@x.id', cc: 'c@x.id', subject: 'Uji', text: 'Isi \u2013 \"kutip\" $(rm) `x`', html: '<p><a href="https://s.id/klinikHAP">x</a></p>' });
+    assert.equal((await post2({ to: 'a@x.id', subject: 'U', text: 'I', html: 123 })).status, 400);
     assert.equal((await post2({ to: '', subject: 'Uji', text: 'Isi' })).status, 200);   // tujuan boleh kosong
     assert.equal((await post2({ to: 'salah', subject: 'Uji', text: 'Isi' })).status, 400);
     assert.equal((await post2({ to: 'a@x.id', subject: 'A\nB', text: 'Isi' })).status, 400);

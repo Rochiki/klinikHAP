@@ -58,7 +58,8 @@ const PS_SCRIPT = [
   "$j = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($raw)) | ConvertFrom-Json",
   "$ol = New-Object -ComObject Outlook.Application",
   "$m = $ol.CreateItem(0)",
-  "$m.To = [string]$j.to; $m.CC = [string]$j.cc; $m.Subject = [string]$j.subject; $m.Body = [string]$j.text",
+  "$m.To = [string]$j.to; $m.CC = [string]$j.cc; $m.Subject = [string]$j.subject",
+  "if ($j.html) { $m.HTMLBody = [string]$j.html } else { $m.Body = [string]$j.text }",
   "$m.Display()"
 ].join('\n');
 
@@ -126,6 +127,7 @@ function validateMail(b, opts) {
   }
   if (typeof b.subject !== 'string' || !b.subject.trim() || b.subject.length > 300 || /[\r\n]/.test(b.subject)) return 'Subjek tidak valid.';
   if (typeof b.text !== 'string' || !b.text.trim() || b.text.length > 20000) return 'Isi email tidak valid.';
+  if (b.html !== undefined && (typeof b.html !== 'string' || b.html.length > 80000)) return 'Isi HTML tidak valid.';
   return null;
 }
 
@@ -159,7 +161,7 @@ function createServer(mailer, opts) {
         if (problem) return sendJson(res, 400, { ok: false, error: problem });
         if (isOutlook) {
           try {
-            await opener({ to: parseList(body.to).join(';'), cc: parseList(body.cc).join(';'), subject: body.subject, text: body.text });
+            await opener({ to: parseList(body.to).join(';'), cc: parseList(body.cc).join(';'), subject: body.subject, text: body.text, html: body.html || '' });
             return sendJson(res, 200, { ok: true });
           } catch (e) {
             console.error('Gagal membuka Outlook:', e.message);
@@ -170,7 +172,7 @@ function createServer(mailer, opts) {
           const info = await mailer.transport.sendMail({
             from: process.env.MAIL_FROM || process.env.SMTP_USER || 'klinik@localhost',
             to: parseList(body.to), cc: parseList(body.cc).length ? parseList(body.cc) : undefined,
-            subject: body.subject, text: body.text
+            subject: body.subject, text: body.text, html: body.html || undefined
           });
           if (mailer.mode === 'dry-run') console.log('[dry-run] email ke', body.to, '|', body.subject);
           return sendJson(res, 200, { ok: true, messageId: info.messageId || null });

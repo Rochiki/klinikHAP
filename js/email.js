@@ -103,7 +103,7 @@
     var w = [];
     w.push('Kepada Yth.');
     w.push('Bapak/Ibu ' + v.name);
-    w.push('NIK ' + v.nik + ' - ' + v.dept);
+    w.push(v.dept);
     w.push('');
     w.push('Terima kasih telah berkunjung ke ' + clinic + '. Berikut ringkasan kunjungan Anda:');
     w.push('');
@@ -186,6 +186,23 @@
     };
   }
 
+  /* ---------- HTML (agar link bisa diklik) ---------- */
+  function escapeHtml(t) {
+    return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  /** Ubah teks email menjadi HTML sederhana; URL otomatis menjadi tautan yang dapat diklik. */
+  function toHtml(text) {
+    var paras = String(text || '').replace(/\r\n/g, '\n').split(/\n{2,}/).map(function (p) {
+      var html = escapeHtml(p).split('\n').map(function (line) {
+        var indent = /^ */.exec(line)[0].length;
+        return new Array(indent + 1).join('&nbsp;') + line.slice(indent);
+      }).join('<br>');
+      html = html.replace(/(https?:\/\/[^\s<]*[^\s<.,;:!?)])/g, '<a href="$1">$1</a>');
+      return '<p style="margin:0 0 12px 0">' + html + '</p>';
+    });
+    return '<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1f2328">' + paras.join('') + '</div>';
+  }
+
   /* ---------- mailto & .eml ---------- */
   function mailtoUrl(m) {
     var q = [];
@@ -208,7 +225,10 @@
     return parts.join('\r\n ');
   }
 
-  /** File .eml (draf; Outlook membukanya sebagai email yang siap dikirim). */
+  function wrap76(b) { return b.replace(/(.{76})/g, '$1\r\n'); }
+  function crlf(t) { return String(t || '').replace(/\r?\n/g, '\r\n'); }
+
+  /** File .eml (draf; Outlook membukanya sebagai email yang siap dikirim). Bila ada m.html: teks + HTML. */
   function toEml(m) {
     var h = [];
     h.push('X-Unsent: 1');
@@ -216,10 +236,18 @@
     if (m.cc) h.push('Cc: ' + m.cc);
     h.push('Subject: ' + encodeHeader(m.subject || ''));
     h.push('MIME-Version: 1.0');
-    h.push('Content-Type: text/plain; charset=UTF-8');
-    h.push('Content-Transfer-Encoding: base64');
-    var body = b64(String(m.body || '').replace(/\r?\n/g, '\r\n')).replace(/(.{76})/g, '$1\r\n');
-    return h.join('\r\n') + '\r\n\r\n' + body + '\r\n';
+    if (!m.html) {
+      h.push('Content-Type: text/plain; charset=UTF-8');
+      h.push('Content-Transfer-Encoding: base64');
+      return h.join('\r\n') + '\r\n\r\n' + wrap76(b64(crlf(m.body))) + '\r\n';
+    }
+    var bd = '=_klinikhap_' + Math.random().toString(36).slice(2, 12);
+    h.push('Content-Type: multipart/alternative; boundary="' + bd + '"');
+    function part(type, content) {
+      return '--' + bd + '\r\nContent-Type: ' + type + '; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n' +
+        wrap76(b64(content)) + '\r\n';
+    }
+    return h.join('\r\n') + '\r\n\r\n' + part('text/plain', crlf(m.body)) + part('text/html', m.html) + '--' + bd + '--\r\n';
   }
 
   return {
@@ -228,6 +256,6 @@
     pad: pad, ymd: ymd, fmtDate: fmtDate, fmtDateShort: fmtDateShort, fmtTime: fmtTime,
     parseYmd: parseYmd, restRange: restRange, restText: restText,
     buildSuratNo: buildSuratNo, isEmail: isEmail, splitEmails: splitEmails,
-    buildEmails: buildEmails, mailtoUrl: mailtoUrl, toEml: toEml
+    buildEmails: buildEmails, toHtml: toHtml, mailtoUrl: mailtoUrl, toEml: toEml
   };
 });
