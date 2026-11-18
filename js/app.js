@@ -582,9 +582,18 @@
     var v = state.current;
     switch (btn.dataset.action) {
       case 'mailto':
-        // Windows menolak link mailto > ~2000 karakter; bila terlalu panjang, isi disalin ke clipboard
+        // Windows menolak link mailto > ~2000 karakter; untuk isi panjang dibuka di Outlook Web agar isi tetap terisi
         var url = E.mailtoUrl(m), long = url.length > MAILTO_MAX;
-        if (long) { url = E.mailtoUrl({ to: m.to, cc: m.cc, subject: m.subject, body: '' }); copyQuiet(m.body); }
+        if (long) {
+          var wu = outlookWebUrl(m, true);
+          if (wu.length <= OUTLOOK_WEB_MAX) {
+            var w0 = window.open(wu, '_blank', 'noopener'); setOpened(role);
+            toast(w0 === null && window.__calls === undefined ? 'Jendela Outlook Web diblokir browser. Izinkan pop-up untuk halaman ini lalu klik lagi.'
+              : 'Isi email terlalu panjang untuk mailto, jadi dibuka di Outlook Web dengan isi lengkap.' + (state.pdf ? ' Lampirkan surat PDF (Unduh PDF).' : ''));
+            break;
+          }
+          url = E.mailtoUrl({ to: m.to, cc: m.cc, subject: m.subject, body: '' }); copyQuiet(m.body);
+        }
         var a = el('a', { href: url }); document.body.appendChild(a); a.click(); a.remove();
         setOpened(role);
         toast(long
@@ -678,6 +687,14 @@
       .then(function () { btn.disabled = false; btn.textContent = old; });
   }
 
+  /* alamat Outlook Web (deeplink): tidak dibatasi panjang tautan Windows, jadi isi email lengkap tetap tampil */
+  function outlookWebUrl(m, withBody) {
+    var q = ['to=' + encodeURIComponent(m.to), 'subject=' + encodeURIComponent(m.subject)];
+    if (m.cc) q.splice(1, 0, 'cc=' + encodeURIComponent(m.cc));
+    if (withBody) q.push('body=' + encodeURIComponent(m.body.replace(/\r?\n/g, '\r\n')));
+    return 'https://outlook.office.com/mail/deeplink/compose?' + q.join('&');
+  }
+
   /* Selesai (tanpa server lokal): buka kedua email berurutan lewat mailto dengan isi terisi */
   function finishViaMailto() {
     var v = state.current;
@@ -685,21 +702,27 @@
       var role = c.dataset.role; return !((v.emailOpened && v.emailOpened[role]) || (v.emailStatus && v.emailStatus[role]));
     });
     if (!todo.length) { $('#emailDialog').close(); return; }
-    var longOnes = 0;
-    todo.forEach(function (card, i) {
-      setTimeout(function () {
-        var m = readCard(card), role = card.dataset.role;
-        var url = E.mailtoUrl(m);
-        if (url.length > MAILTO_MAX) { longOnes++; url = E.mailtoUrl({ to: m.to, cc: m.cc, subject: m.subject, body: '' }); copyQuiet(m.body); }
-        var a = el('a', { href: url }); document.body.appendChild(a); a.click(); a.remove();
-        setOpened(role);
-        if (i === todo.length - 1) {
-          $('#emailDialog').close();
-          toast((longOnes ? 'Isi email panjang, sudah DISALIN: di Outlook klik badan email lalu Ctrl+V. ' : '') + 'Email dibuka di Outlook.' +
-            (state.pdf ? ' Lampirkan surat PDF (Unduh PDF) di email.' : '') + ' Periksa, lalu tekan Kirim.');
+    var viaWeb = 0, blocked = 0, queue = [];
+    todo.forEach(function (card) {
+      var m = readCard(card), role = card.dataset.role, url = E.mailtoUrl(m);
+      if (S.getSettings().finishMode !== 'mailto' || url.length > MAILTO_MAX) { // Outlook baru sering mengabaikan isi mailto; juga bila terlalu panjang untuk mailto Windows: buka di Outlook Web agar isi tetap terisi
+        var wurl = outlookWebUrl(m, true);
+        if (wurl.length <= OUTLOOK_WEB_MAX) {
+          viaWeb++; if (window.open(wurl, '_blank', 'noopener') === null && window.__calls === undefined) blocked++; else setOpened(role);
+          return;
         }
+        copyQuiet(m.body); url = E.mailtoUrl({ to: m.to, cc: m.cc, subject: m.subject, body: '' });
+      }
+      queue.push({ url: url, role: role });
+    });
+    queue.forEach(function (q, i) {
+      setTimeout(function () {
+        var a = el('a', { href: q.url }); document.body.appendChild(a); a.click(); a.remove(); setOpened(q.role);
       }, i * 1200);
     });
+    if (!blocked) $('#emailDialog').close();
+    toast(blocked ? 'Jendela Outlook Web diblokir browser. Izinkan pop-up untuk halaman ini lalu klik Selesai lagi.'
+      : 'Email dibuka' + (viaWeb ? ' di Outlook Web (isi lengkap)' : ' di Outlook') + '. ' + (state.pdf ? 'Lampirkan surat PDF (Unduh PDF) di email. ' : '') + 'Periksa, lalu tekan Kirim.', !!blocked);
   }
 
   function sendViaServer(btn, role, m) {
@@ -920,6 +943,7 @@
     f.elements.phone.value = s.phone;
     f.elements.verifyUrl.value = s.verifyUrl;
     f.elements.hcNiks.value = s.hcNiks;
+    f.elements.finishMode.value = s.finishMode === 'mailto' ? 'mailto' : 'web';
     $('#logoHint').textContent = s.logoData ? 'Memakai logo unggahan.' : 'Memakai logo Hexindo bawaan.';
     $('#btnLogoReset').hidden = !s.logoData;
     f.elements.suratPrefix.value = s.suratPrefix;
@@ -952,7 +976,7 @@
       doctors: doctors, defaultDoctor: def || doctors[0] || '',
       suratPrefix: prefix, ccAlways: E.splitEmails(cc).join(', '),
       periodStart: f.elements.periodStart.value || '2026-04-01', address: f.elements.address.value.trim(),
-      phone: f.elements.phone.value.trim(), verifyUrl: f.elements.verifyUrl.value.trim(), hcNiks: f.elements.hcNiks.value.trim(),
+      phone: f.elements.phone.value.trim(), verifyUrl: f.elements.verifyUrl.value.trim(), hcNiks: f.elements.hcNiks.value.trim(), finishMode: f.elements.finishMode.value === 'mailto' ? 'mailto' : 'web',
       departments: linesOf(f.elements.departments.value)
     });
     refreshLists();

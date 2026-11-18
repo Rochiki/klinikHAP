@@ -297,6 +297,13 @@
             <label for="s-verifyUrl">Alamat verifikasi surat <span class="opt">(opsional, isi QR)</span></label>
             <input id="s-verifyUrl" name="verifyUrl" type="text" maxlength="200" placeholder="https://.../index.html">
           </div>
+          <div class="field">
+            <label for="s-finishMode">Tombol Selesai membuka email lewat</label>
+            <select id="s-finishMode" name="finishMode">
+              <option value="web">Outlook Web / Outlook baru (isi email terisi lengkap)</option>
+              <option value="mailto">mailto (Outlook classic di komputer)</option>
+            </select>
+          </div>
           <div class="field span-2">
             <label for="s-hcNiks">NIK peserta Health Corner <span class="opt">(satu per baris; mengisi kolom Peserta HC di rekap)</span></label>
             <textarea id="s-hcNiks" name="hcNiks" rows="3"></textarea>
