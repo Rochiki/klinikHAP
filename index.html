@@ -304,6 +304,13 @@
               <option value="mailto">mailto (Outlook classic di komputer)</option>
             </select>
           </div>
+          <div class="field">
+            <label for="s-saveMode">Menyimpan PDF / Excel / cadangan</label>
+            <select id="s-saveMode" name="saveMode">
+              <option value="ask">Tanya lokasi &amp; nama berkas (Chrome/Edge)</option>
+              <option value="auto">Langsung ke folder Unduhan</option>
+            </select>
+          </div>
           <div class="field span-2">
             <label for="s-hcNiks">NIK peserta Health Corner <span class="opt">(satu per baris; mengisi kolom Peserta HC di rekap)</span></label>
             <textarea id="s-hcNiks" name="hcNiks" rows="3"></textarea>
@@ -376,7 +383,7 @@
       <p class="muted small" id="mailNote">Buka tiap email di Outlook, periksa, lalu tekan Kirim di Outlook.</p>
       <div class="btn-row">
         <button type="button" class="btn primary" id="btnFinishOutlook" hidden>Selesai &amp; Buka Kedua Email di Outlook Classic</button>
-        <button type="button" class="btn primary" id="btnFinishMailto">Selesai &amp; Buka Kedua Email</button>
+        <button type="button" class="btn primary" id="btnFinishMailto">Selesai &amp; Buka Email</button>
         <button type="button" class="btn" data-close id="btnDone">Tutup saja</button>
       </div>
     </div>

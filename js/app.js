@@ -64,12 +64,26 @@
     }, 3400);
   }
 
-  function download(filename, content, mime) {
-    var blob = new Blob([content], { type: mime });
+  function downloadPlain(filename, blob) {
     var url = URL.createObjectURL(blob);
     var a = el('a', { href: url, download: filename });
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+  // Simpan berkas: bila browser mendukung dan pengaturan "Tanya lokasi simpan" aktif,
+  // tampilkan dialog pilih folder/nama; jika tidak, unduh biasa ke folder Unduhan.
+  function download(filename, content, mime) {
+    var blob = new Blob([content], { type: mime });
+    var ask = S.getSettings().saveMode !== 'auto';
+    if (ask && typeof window.showSaveFilePicker === 'function') {
+      var ext = (filename.match(/\.([a-z0-9]+)$/i) || [])[1] || 'bin';
+      var types = {}; types[mime.split(';')[0]] = ['.' + ext];
+      return window.showSaveFilePicker({ suggestedName: filename, id: 'klinikhap', startIn: 'documents',
+        types: [{ description: ext.toUpperCase(), accept: types }] })
+        .then(function (h) { return h.createWritable().then(function (w) { return w.write(blob).then(function () { return w.close(); }); }).then(function () { toast('Tersimpan: ' + h.name); }); })
+        .catch(function (e) { if (!e || e.name !== 'AbortError') downloadPlain(filename, blob); });
+    }
+    downloadPlain(filename, blob);
   }
   function copyText(text) {
     if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
@@ -702,27 +716,29 @@
       var role = c.dataset.role; return !((v.emailOpened && v.emailOpened[role]) || (v.emailStatus && v.emailStatus[role]));
     });
     if (!todo.length) { $('#emailDialog').close(); return; }
-    var viaWeb = 0, blocked = 0, queue = [];
-    todo.forEach(function (card) {
-      var m = readCard(card), role = card.dataset.role, url = E.mailtoUrl(m);
-      if (S.getSettings().finishMode !== 'mailto' || url.length > MAILTO_MAX) { // Outlook baru sering mengabaikan isi mailto; juga bila terlalu panjang untuk mailto Windows: buka di Outlook Web agar isi tetap terisi
-        var wurl = outlookWebUrl(m, true);
-        if (wurl.length <= OUTLOOK_WEB_MAX) {
-          viaWeb++; if (window.open(wurl, '_blank', 'noopener') === null && window.__calls === undefined) blocked++; else setOpened(role);
-          return;
-        }
-        copyQuiet(m.body); url = E.mailtoUrl({ to: m.to, cc: m.cc, subject: m.subject, body: '' });
+    var useMailto = S.getSettings().finishMode === 'mailto';
+    var first = todo[0], m = readCard(first), role = first.dataset.role, url = E.mailtoUrl(m);
+    var note = state.pdf ? ' Lampirkan surat PDF (Unduh PDF) di email.' : '';
+    var who = role === 'worker' ? 'pekerja' : 'atasan';
+    if (!useMailto || url.length > MAILTO_MAX) {
+      var wurl = outlookWebUrl(m, true);
+      if (wurl.length <= OUTLOOK_WEB_MAX) {
+        // Satu jendela per klik: browser memblokir jendela kedua dari klik yang sama. (Tanpa 'noopener' agar hasil open() bisa dicek.)
+        var w = window.open(wurl, '_blank');
+        if (!w && window.__calls === undefined) { toast('Jendela Outlook Web diblokir browser. Izinkan pop-up untuk halaman ini lalu klik Selesai lagi.', true); return; }
+        try { if (w) w.opener = null; } catch (e) { /* abaikan */ }
+        setOpened(role);
+        finishNext(todo.length - 1, 'Email ' + who + ' dibuka di Outlook Web.' + note);
+        return;
       }
-      queue.push({ url: url, role: role });
-    });
-    queue.forEach(function (q, i) {
-      setTimeout(function () {
-        var a = el('a', { href: q.url }); document.body.appendChild(a); a.click(); a.remove(); setOpened(q.role);
-      }, i * 1200);
-    });
-    if (!blocked) $('#emailDialog').close();
-    toast(blocked ? 'Jendela Outlook Web diblokir browser. Izinkan pop-up untuk halaman ini lalu klik Selesai lagi.'
-      : 'Email dibuka' + (viaWeb ? ' di Outlook Web (isi lengkap)' : ' di Outlook') + '. ' + (state.pdf ? 'Lampirkan surat PDF (Unduh PDF) di email. ' : '') + 'Periksa, lalu tekan Kirim.', !!blocked);
+      copyQuiet(m.body); url = E.mailtoUrl({ to: m.to, cc: m.cc, subject: m.subject, body: '' });
+    }
+    var a = el('a', { href: url }); document.body.appendChild(a); a.click(); a.remove(); setOpened(role);
+    finishNext(todo.length - 1, 'Email ' + who + ' dibuka di Outlook.' + note);
+  }
+  function finishNext(left, msg) {
+    if (left > 0) toast(msg + ' Klik Selesai sekali lagi untuk membuka email berikutnya (' + left + ' lagi).');
+    else { $('#emailDialog').close(); toast(msg + ' Periksa, lalu tekan Kirim.'); }
   }
 
   function sendViaServer(btn, role, m) {
@@ -944,6 +960,7 @@
     f.elements.verifyUrl.value = s.verifyUrl;
     f.elements.hcNiks.value = s.hcNiks;
     f.elements.finishMode.value = s.finishMode === 'mailto' ? 'mailto' : 'web';
+    f.elements.saveMode.value = s.saveMode === 'auto' ? 'auto' : 'ask';
     $('#logoHint').textContent = s.logoData ? 'Memakai logo unggahan.' : 'Memakai logo Hexindo bawaan.';
     $('#btnLogoReset').hidden = !s.logoData;
     f.elements.suratPrefix.value = s.suratPrefix;
@@ -976,7 +993,7 @@
       doctors: doctors, defaultDoctor: def || doctors[0] || '',
       suratPrefix: prefix, ccAlways: E.splitEmails(cc).join(', '),
       periodStart: f.elements.periodStart.value || '2026-04-01', address: f.elements.address.value.trim(),
-      phone: f.elements.phone.value.trim(), verifyUrl: f.elements.verifyUrl.value.trim(), hcNiks: f.elements.hcNiks.value.trim(), finishMode: f.elements.finishMode.value === 'mailto' ? 'mailto' : 'web',
+      phone: f.elements.phone.value.trim(), verifyUrl: f.elements.verifyUrl.value.trim(), hcNiks: f.elements.hcNiks.value.trim(), finishMode: f.elements.finishMode.value === 'mailto' ? 'mailto' : 'web', saveMode: f.elements.saveMode.value === 'auto' ? 'auto' : 'ask',
       departments: linesOf(f.elements.departments.value)
     });
     refreshLists();
