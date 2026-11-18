@@ -132,13 +132,14 @@
    * sheets: [{ name, cols:[{width}], rows:[{height, cells:[{v, s, t}] }], merges:['A1:C1'], freeze:'A6' }]
    * sel: v = string | number | Date | null; s = objek gaya. Tipe angka/teks ditentukan dari v.
    */
-  function build(sheets) {
+  function build(sheets, opts) {
+    opts = opts || {};
     var styles = new Styles(), sheetXml = [];
     sheets.forEach(function (sh) {
       var x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
         '<sheetViews><sheetView workbookViewId="0"' + (sh.hideGrid ? ' showGridLines="0"' : '') + '>' +
-        (sh.freeze ? freezePane(sh.freeze) : '') + '</sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>';
+        (sh.freeze ? freezePane(sh.freeze) : '') + '</sheetView></sheetViews><sheetFormatPr defaultRowHeight="' + (sh.rowHeight || 15) + '"/>';
       if (sh.cols && sh.cols.length) {
         x += '<cols>' + sh.cols.map(function (c, i) {
           return '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + c.width + '" customWidth="1"/>';
@@ -152,7 +153,13 @@
         (row.cells || []).forEach(function (cell, ci) {
           if (!cell) return;
           var ref = colName(ci + 1) + r, s = styles.get(cell.s), v = cell.v;
-          if (v == null || v === '') x += '<c r="' + ref + '" s="' + s + '"/>';
+          if (cell.f != null || cell.si != null) { // rumus (opsional bersama) + nilai tersimpan
+            var ft = cell.si != null
+              ? '<f t="shared"' + (cell.f != null ? ' ref="' + cell.ref + '"' : '') + ' si="' + cell.si + '"' + (cell.f != null ? '>' + esc(cell.f) + '</f>' : '/>')
+              : '<f>' + esc(cell.f) + '</f>';
+            if (typeof v === 'number' && isFinite(v)) x += '<c r="' + ref + '" s="' + s + '">' + ft + '<v>' + v + '</v></c>';
+            else x += '<c r="' + ref + '" s="' + s + '" t="str">' + ft + '<v>' + esc(v == null ? '' : v) + '</v></c>';
+          } else if (v == null || v === '') x += '<c r="' + ref + '" s="' + s + '"/>';
           else if (v instanceof Date) x += '<c r="' + ref + '" s="' + s + '"><v>' + serial(v) + '</v></c>';
           else if (typeof v === 'number' && isFinite(v)) x += '<c r="' + ref + '" s="' + s + '"><v>' + v + '</v></c>';
           else x += '<c r="' + ref + '" s="' + s + '" t="inlineStr"><is><t xml:space="preserve">' + esc(v) + '</t></is></c>';
@@ -161,6 +168,14 @@
       });
       x += '</sheetData>';
       if (sh.merges && sh.merges.length) x += '<mergeCells count="' + sh.merges.length + '">' + sh.merges.map(function (m) { return '<mergeCell ref="' + m + '"/>'; }).join('') + '</mergeCells>';
+      if (sh.validations && sh.validations.length) {
+        x += '<dataValidations count="' + sh.validations.length + '">' + sh.validations.map(function (d) {
+          return '<dataValidation type="' + d.type + '"' + (d.errorStyle ? ' errorStyle="' + d.errorStyle + '"' : '') +
+            ' allowBlank="1" showInputMessage="1" showErrorMessage="1"' + (d.errorTitle ? ' errorTitle="' + esc(d.errorTitle) + '"' : '') +
+            (d.error ? ' error="' + esc(d.error) + '"' : '') + ' sqref="' + d.sqref + '"><formula1>' + esc(d.f1) + '</formula1>' +
+            (d.f2 != null ? '<formula2>' + esc(d.f2) + '</formula2>' : '') + '</dataValidation>';
+        }).join('') + '</dataValidations>';
+      }
       x += '<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/>' +
         '<pageSetup orientation="landscape" paperSize="9" fitToHeight="0"/></worksheet>';
       sheetXml.push(x);
@@ -172,7 +187,9 @@
         '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
       { name: '_rels/.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
       { name: 'xl/workbook.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' +
-        sheets.map(function (s, i) { return '<sheet name="' + esc(s.name) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>'; }).join('') + '</sheets></workbook>' },
+        sheets.map(function (s, i) { return '<sheet name="' + esc(s.name) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>'; }).join('') + '</sheets>' +
+        (opts.names && opts.names.length ? '<definedNames>' + opts.names.map(function (n) { return '<definedName name="' + esc(n.name) + '">' + esc(n.ref) + '</definedName>'; }).join('') + '</definedNames>' : '') +
+        (opts.recalc ? '<calcPr calcId="191029" fullCalcOnLoad="1"/>' : '') + '</workbook>' },
       { name: 'xl/_rels/workbook.xml.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
         sheets.map(function (s, i) { return '<Relationship Id="rId' + (i + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>'; }).join('') +
         '<Relationship Id="rId' + (sheets.length + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' }

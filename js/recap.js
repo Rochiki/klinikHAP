@@ -1,6 +1,6 @@
 /*
  * Klinik HAP - rekap kunjungan dalam tata letak INPUT_KUNJUNGAN (kolom, warna, lebar sama dengan contoh klinik).
- * Kolom kuning = isian, kolom abu-abu = dihitung otomatis (di sini sudah berupa nilai, bukan rumus).
+ * Kolom kuning = isian, kolom abu-abu = rumus hidup yang sama dengan contoh; lembar acuan (MASTER_*) ikut di dalam berkas.
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
@@ -110,51 +110,200 @@
     return st;
   }
 
-  /** Model lembar kerja siap tulis untuk daftar kunjungan (urut tanggal naik). */
+  /* Rumus kolom otomatis, persis seperti contoh (baris 6 sebagai acuan). Nama (PERIOD_START, DX_LIST, dst.) ada di buku kerja ini. */
+  var FORMULAS = {
+    0: 'IF(B6="","",ROW()-5)',
+    2: 'IF(B6="","",IF(OR(B6<PERIOD_START,B6>=EDATE(PERIOD_START,12)),"Luar periode",(YEAR(B6)-YEAR(PERIOD_START))*12+MONTH(B6)-MONTH(PERIOD_START)+1))',
+    3: 'IF(ISNUMBER(C6),INDEX(MONTH_SHORT,C6),"")',
+    8: 'IF(G6="","",IFERROR(VLOOKUP(G6,DEPT_MAP,2,0),"Belum dipetakan"))',
+    10: 'IF(J6="","",IFERROR(INDEX(DX_GRP,MATCH(J6,DX_LIST,0)),"Belum dipetakan"))',
+    11: 'IF(J6="","",IFERROR(INDEX(DX_ICD,MATCH(J6,DX_LIST,0)),""))',
+    22: 'IF(J6="","",COUNTA(M6:Q6))',
+    23: 'IF(J6="","",IF(SUMPRODUCT(COUNTIFS(OB_LIST,M6:Q6,OB_AB,1))>0,1,0))',
+    24: 'IF(J6="","",IF(SUMPRODUCT(COUNTIFS(OB_LIST,M6:Q6,OB_STER,1))>0,1,0))',
+    25: 'IF(J6="","",IF(SUMPRODUCT(COUNTIFS(OB_LIST,M6:Q6,OB_NSAID,1))>0,1,0))',
+    26: 'IF(J6="","",IF(SUMPRODUCT(COUNTIFS(OB_LIST,M6:Q6,OB_HCC,1))>0,1,0))',
+    27: 'IF(J6="","",IF(SUMPRODUCT(COUNTIFS(OB_LIST,M6:Q6,OB_SED,1))>0,1,0))',
+    28: 'IF(J6="","",IFERROR(INDEX(DX_ISPA,MATCH(J6,DX_LIST,0))*1,0))',
+    29: 'IF(J6="","",IFERROR(INDEX(DX_DIARE,MATCH(J6,DX_LIST,0))*1,0))',
+    30: 'IF(J6="","",IF(E6="",0,IF(COUNTIF(HC_NIK,E6)>0,1,0)))',
+    31: 'IF(B6="","",WEEKDAY(B6,2))'
+  };
+  var FIRST = 6, CHUNK = 64;
+
+  /** Nilai tersimpan kolom otomatis agar tampil benar sebelum Excel menghitung ulang (kosong bila diagnosis kosong). */
+  function cachedRow(vals) {
+    var out = vals.slice(), noDx = !vals[9];
+    if (!vals[1]) { out[0] = ''; out[2] = ''; out[3] = ''; out[31] = ''; }
+    if (!vals[6]) out[8] = '';
+    for (var c = 22; c <= 30; c++) if (noDx) out[c] = '';
+    if (noDx) { out[10] = ''; out[11] = ''; }
+    return out;
+  }
+
+  /** Cell kolom otomatis memakai rumus bersama (potongan 64 baris, seperti Excel). */
+  function formulaCell(ci, rowNo, lastRow, value, st) {
+    var k = Math.floor((rowNo - FIRST) / CHUNK), start = FIRST + k * CHUNK, end = Math.min(lastRow, start + CHUNK - 1);
+    var si = ci * 1000 + k, cell = { v: value, s: st, si: si };
+    if (rowNo === start) {
+      cell.f = FORMULAS[ci].replace(/([A-Z]{1,2})6\b/g, '$1' + rowNo);
+      cell.ref = X.colName(ci + 1) + start + ':' + X.colName(ci + 1) + end;
+    }
+    return cell;
+  }
+
+  function lastRowFor(n) { return FIRST - 1 + Math.max(2000, n + 200); }
+
+  function head(title, sub, ncols) {
+    var navy = { fill: NAVY };
+    var r1 = [{ v: title, s: { font: { b: 1, sz: 15, color: 'FFFFFF' }, fill: NAVY, align: { h: 'left', v: 'center' } } }];
+    var r2 = [{ v: sub, s: { font: { i: 1, sz: 9, color: 'CFE3F5' }, fill: NAVY, align: { h: 'left', v: 'center' } } }];
+    for (var i = 1; i < ncols; i++) { r1.push({ v: null, s: navy }); r2.push({ v: null, s: navy }); }
+    return [{ height: 30, cells: r1 }, { height: 18, cells: r2 }];
+  }
+  var HEAD_ST = { font: { b: 1, color: 'FFFFFF', sz: 10 }, fill: NAVY, border: '2B4C6F', align: { h: 'center', v: 'center', wrap: 1 } };
+  var CELL_ST = { font: { sz: 10 }, fill: INPUT_FILL, border: INPUT_LINE, align: { v: 'center' } };
+  var CELL_C = { font: { sz: 10 }, fill: INPUT_FILL, border: INPUT_LINE, align: { v: 'center', h: 'center' } };
+
+  /** Lembar INPUT_KUNJUNGAN dengan rumus, dropdown, dan baris kosong siap isi (seperti contoh klinik). */
   function buildSheet(visits, settings, now) {
     var sorted = visits.slice().sort(function (a, b) { return new Date(a.visitAt) - new Date(b.visitAt); });
-    var n = COLS.length, last = X.colName(n);
-    var rows = [], pad2 = function (x) { return String(x).padStart(2, '0'); };
-    var created = now || new Date();
-    var stamp = pad2(created.getDate()) + '/' + pad2(created.getMonth() + 1) + '/' + created.getFullYear();
-
-    var r1 = [{ v: TITLE, s: { font: { b: 1, sz: 15, color: 'FFFFFF' }, fill: NAVY, align: { h: 'left', v: 'center' } } }];
-    var r2 = [{ v: SUBTITLE, s: { font: { i: 1, sz: 9, color: 'CFE3F5' }, fill: NAVY, align: { h: 'left', v: 'center' } } }];
-    for (var i = 1; i < n; i++) {
-      r1.push({ v: null, s: { fill: NAVY } });
-      r2.push({ v: null, s: { fill: NAVY } });
-    }
-    rows[0] = { height: 30, cells: r1 };
-    rows[1] = { height: 18, cells: r2 };
-    var legend = [
+    var n = COLS.length, last = X.colName(n), lastRow = lastRowFor(sorted.length);
+    var rows = head(TITLE, SUBTITLE, n);
+    rows[2] = { cells: [
       { v: 'Legenda:', s: { font: { b: 1, sz: 9 }, align: { v: 'center' } } },
       { v: 'Input', s: { font: { sz: 10 }, fill: INPUT_FILL, border: INPUT_LINE, align: { v: 'center' } } },
       { v: 'Otomatis', s: { font: { sz: 10, color: '334155' }, fill: AUTO_FILL, border: AUTO_LINE, align: { v: 'center' } } },
-      { v: 'Rekap dibuat dari aplikasi Klinik HAP pada ' + stamp + ' (' + sorted.length + ' kunjungan). Kolom abu-abu sudah berisi nilai hasil hitung aplikasi.',
+      { v: 'Contoh baris: 03/08/2026 | NIK | A.S. | HC PA | Karyawan | Gastroenteritis akut (GEA) | Cefadroxil 500 mg /Lostacef | 6 ...',
         s: { font: { i: 1, sz: 9, color: '475569' }, align: { v: 'top', wrap: 1 } } }
-    ];
-    rows[2] = { cells: legend };
+    ] };
     rows[4] = { height: 40, cells: COLS.map(function (c) { return { v: c.h, s: style(c, true) }; }) };
-    sorted.forEach(function (v, k) {
-      var vals = buildRow(v, settings, k + 1);
-      rows[5 + k] = { cells: vals.map(function (val, ci) { return { v: val, s: style(COLS[ci], false) }; }) };
-    });
+    var sts = COLS.map(function (c) { return style(c, false); });
+    for (var r = FIRST; r <= lastRow; r++) {
+      var vals = r - FIRST < sorted.length ? cachedRow(buildRow(sorted[r - FIRST], settings, r - FIRST + 1)) : null;
+      rows[r - 1] = { cells: COLS.map(function (c, ci) {
+        var val = vals ? vals[ci] : '';
+        if (c.auto) return formulaCell(ci, r, lastRow, val, sts[ci]);
+        return { v: val, s: sts[ci] };
+      }) };
+    }
+    var rg = function (c) { return c + FIRST + ':' + c + lastRow; };
     return {
-      name: 'Sheet1',
+      name: 'INPUT_KUNJUNGAN', rowHeight: 14.5,
       cols: COLS.map(function (c) { return { width: c.w }; }),
       rows: rows,
       merges: ['A1:' + last + '1', 'A2:' + last + '2', 'D3:L3'],
-      freeze: 'A6'
+      validations: [
+        { type: 'list', sqref: rg('G'), f1: 'DEPT_LIST', errorStyle: 'information', error: 'Departemen baru: tambahkan juga di MASTER_MAP agar kelompok kerja terbaca.' },
+        { type: 'list', sqref: 'AH' + FIRST + ':AI' + lastRow, f1: 'L_YN' },
+        { type: 'list', sqref: rg('H'), f1: 'L_STATUS' },
+        { type: 'list', sqref: 'M' + FIRST + ':Q' + lastRow, f1: 'OB_DD', errorStyle: 'warning', error: 'Obat belum ada di MASTER_OBAT.' },
+        { type: 'list', sqref: rg('J'), f1: 'DX_DD', errorStyle: 'warning', error: 'Diagnosis belum ada di MASTER_DIAGNOSA. Tambahkan dulu agar terhitung di dashboard.' },
+        { type: 'date', sqref: rg('B'), f1: '43831', f2: '49674', errorTitle: 'Tanggal', error: 'Isi tanggal valid (dd/mm/yyyy).' }
+      ]
     };
   }
 
-  /** Berkas .xlsx (Uint8Array) untuk daftar kunjungan. */
+  /** Lembar acuan (master) yang dipakai rumus: MASTER_DIAGNOSA, MASTER_OBAT, MASTER_MAP, INPUT_HEALTH_CORNER + nama terdefinisi. */
+  function buildMasters(visits, settings) {
+    var MONTHS = MONTH_ID;
+    var ps = /^(\d{4})-(\d{2})-(\d{2})$/.exec((settings && settings.periodStart) || '');
+    var start = ps ? new Date(+ps[1], +ps[2] - 1, 1) : new Date(2026, 3, 1);
+    var tick = function (title, sub, widths, headers, rowsData, align) {
+      var rows = head(title, sub, widths.length);
+      var hr = [];
+      headers.forEach(function (h, i) { hr[i] = h ? { v: h, s: HEAD_ST } : null; });
+      rows[3] = { height: 30, cells: hr };
+      return { rows: rows, widths: widths, data: rowsData, align: align };
+    };
+
+    /* diagnosis: daftar baku + tambahan sendiri */
+    var dx = M.DX.slice();
+    var dxLast = Math.max(154, 4 + dx.length);
+    var dxSheet = { name: 'MASTER_DIAGNOSA', cols: [38, 9, 24, 4, 10, 10].map(function (w) { return { width: w }; }), rowHeight: 14.5,
+      rows: head('MASTER_DIAGNOSA — daftar acuan diagnosis', 'Dropdown "Diagnosis (pilih)" dan kolom kelompok penyakit / ICD-10 membaca daftar ini.', 6), merges: ['A1:F1', 'A2:F2'] };
+    dxSheet.rows[3] = { height: 30, cells: [{ v: 'Diagnosis', s: HEAD_ST }, { v: 'ICD-10', s: HEAD_ST }, { v: 'Kelompok penyakit', s: HEAD_ST }, null,
+      { v: 'ISPA non-pneu (1/0)', s: HEAD_ST }, { v: 'Diare (1/0)', s: HEAD_ST }] };
+    dx.forEach(function (r, i) {
+      dxSheet.rows[4 + i] = { cells: [{ v: r[0], s: CELL_ST }, { v: r[2], s: CELL_C }, { v: r[1], s: CELL_ST }, null, { v: r[3], s: CELL_C }, { v: r[4], s: CELL_C }] };
+    });
+
+    /* obat: daftar baku + obat yang dipakai di kunjungan tetapi belum ada di daftar baku */
+    var drugs = M.DRUG_MASTER.map(function (r) { return r.slice(); }), seen = {};
+    drugs.forEach(function (r) { seen[M.norm(r[0])] = 1; });
+    visits.forEach(function (v) {
+      medsOf(v).slice(0, 5).forEach(function (m) {
+        var key = M.norm(m.name);
+        if (!key || seen[key]) return;
+        seen[key] = 1;
+        var f = M.drugFlag1(m.name);
+        drugs.push([m.name, f.ab, f.ster, f.nsaid, f.sed, f.hcc]);
+      });
+    });
+    var obLast = Math.max(64, 4 + drugs.length);
+    var obSheet = { name: 'MASTER_OBAT', cols: [30, 4, 4, 4, 4, 4, 4, 4, 10, 10, 10, 10, 4, 12].map(function (w) { return { width: w }; }), rowHeight: 14.5,
+      rows: head('MASTER_OBAT — daftar acuan obat', 'Tandai 1 pada kelas obatnya. Obat baru: tambahkan di baris kosong paling bawah daftar.', 14), merges: ['A1:N1', 'A2:N2'] };
+    var oh = [];
+    oh[0] = { v: 'Nama obat', s: HEAD_ST };
+    oh[8] = { v: 'Anti-biotik', s: HEAD_ST }; oh[9] = { v: 'Steroid', s: HEAD_ST }; oh[10] = { v: 'NSAID', s: HEAD_ST };
+    oh[11] = { v: 'Sedatif', s: HEAD_ST }; oh[13] = { v: 'Perhatian HT/DM', s: HEAD_ST };
+    obSheet.rows[3] = { height: 30, cells: oh };
+    drugs.forEach(function (r, i) {
+      var c = []; c[0] = { v: r[0], s: CELL_ST };
+      c[8] = { v: r[1], s: CELL_C }; c[9] = { v: r[2], s: CELL_C }; c[10] = { v: r[3], s: CELL_C }; c[11] = { v: r[4], s: CELL_C }; c[13] = { v: r[5], s: CELL_C };
+      obSheet.rows[4 + i] = { cells: c };
+    });
+
+    /* peta departemen, bulan, daftar pilihan */
+    var depts = Object.keys(M.DEPT).sort(function (a, b) { return a.toLowerCase() < b.toLowerCase() ? -1 : 1; });
+    var mapLast = Math.max(155, 5 + depts.length);
+    var mapSheet = { name: 'MASTER_MAP', cols: [3, 14, 12, 3, 3, 3, 30, 16, 3, 3, 3, 3, 3, 3, 3, 3, 3, 26, 10].map(function (w) { return { width: w }; }), rowHeight: 14.5,
+      rows: head('MASTER_MAP — peta departemen & daftar pilihan', 'Departemen baru: tambahkan di bawah daftar, lalu isi Office / Lapangan.', 19), merges: ['A1:S1', 'A2:S2'] };
+    var put = function (r, ci, cell) { (mapSheet.rows[r - 1] = mapSheet.rows[r - 1] || { cells: [] }).cells[ci - 1] = cell; };
+    put(4, 2, { v: 'Awal periode', s: { font: { b: 1, sz: 10 }, align: { v: 'center' } } });
+    put(4, 3, { v: start, s: Object.assign({ numFmt: 'date', align: { v: 'center', h: 'center' } }, CELL_ST) });
+    put(7, 3, { v: 'Bulan', s: HEAD_ST });
+    for (var i = 0; i < 12; i++) {
+      var m0 = new Date(start.getFullYear(), start.getMonth() + i, 1);
+      put(8 + i, 3, { v: MONTHS[m0.getMonth()] + '-' + String(m0.getFullYear()).slice(2), s: CELL_C });
+    }
+    put(5, 7, { v: 'Departemen', s: HEAD_ST }); put(5, 8, { v: 'Kelompok kerja', s: HEAD_ST });
+    depts.forEach(function (d, k) { put(6 + k, 7, { v: d, s: CELL_ST }); put(6 + k, 8, { v: M.DEPT[d], s: CELL_C }); });
+    put(5, 18, { v: 'Status pasien', s: HEAD_ST }); put(5, 19, { v: 'Ya/Tidak', s: HEAD_ST });
+    M.STATUS.forEach(function (st, k) { put(6 + k, 18, { v: st, s: CELL_ST }); });
+    put(6, 19, { v: 'Ya', s: CELL_C }); put(7, 19, { v: 'Tidak', s: CELL_C });
+
+    /* peserta Health Corner: NIK dari Pengaturan */
+    var hc = parseList(settings && settings.hcNiks), hcLast = Math.max(156, 6 + hc.length);
+    var hcSheet = { name: 'INPUT_HEALTH_CORNER', cols: [{ width: 3 }, { width: 16 }], rowHeight: 14.5,
+      rows: head('INPUT_HEALTH_CORNER — NIK peserta Health Corner', 'Isi NIK (kolom B, mulai baris 7). Kolom "Peserta HC" di INPUT_KUNJUNGAN membaca daftar ini.', 2), merges: ['A1:B1', 'A2:B2'] };
+    hcSheet.rows[5] = { height: 20, cells: [null, { v: 'NIK', s: HEAD_ST }] };
+    hc.forEach(function (nik, k) { hcSheet.rows[6 + k] = { cells: [null, { v: nik, s: CELL_ST }] }; });
+
+    var names = [
+      ['DEPT_LIST', 'MASTER_MAP!$G$6:$G$' + mapLast], ['DEPT_MAP', 'MASTER_MAP!$G$6:$H$' + mapLast],
+      ['DX_DD', 'OFFSET(MASTER_DIAGNOSA!$A$5,0,0,MAX(1,COUNTA(MASTER_DIAGNOSA!$A$5:$A$' + dxLast + ')),1)'],
+      ['DX_DIARE', 'MASTER_DIAGNOSA!$F$5:$F$' + dxLast], ['DX_GRP', 'MASTER_DIAGNOSA!$C$5:$C$' + dxLast],
+      ['DX_ICD', 'MASTER_DIAGNOSA!$B$5:$B$' + dxLast], ['DX_ISPA', 'MASTER_DIAGNOSA!$E$5:$E$' + dxLast],
+      ['DX_LIST', 'MASTER_DIAGNOSA!$A$5:$A$' + dxLast], ['HC_NIK', 'INPUT_HEALTH_CORNER!$B$7:$B$' + hcLast],
+      ['L_STATUS', 'MASTER_MAP!$R$6:$R$10'], ['L_YN', 'MASTER_MAP!$S$6:$S$7'], ['MONTH_SHORT', 'MASTER_MAP!$C$8:$C$19'],
+      ['OB_AB', 'MASTER_OBAT!$I$5:$I$' + obLast],
+      ['OB_DD', 'OFFSET(MASTER_OBAT!$A$5,0,0,MAX(1,COUNTA(MASTER_OBAT!$A$5:$A$' + obLast + ')),1)'],
+      ['OB_HCC', 'MASTER_OBAT!$N$5:$N$' + obLast], ['OB_LIST', 'MASTER_OBAT!$A$5:$A$' + obLast],
+      ['OB_NSAID', 'MASTER_OBAT!$K$5:$K$' + obLast], ['OB_SED', 'MASTER_OBAT!$L$5:$L$' + obLast],
+      ['OB_STER', 'MASTER_OBAT!$J$5:$J$' + obLast], ['PERIOD_START', 'MASTER_MAP!$C$4']
+    ].map(function (p) { return { name: p[0], ref: p[1] }; });
+    return { sheets: [dxSheet, obSheet, mapSheet, hcSheet], names: names };
+  }
+
+  /** Berkas .xlsx (Uint8Array): INPUT_KUNJUNGAN berisi rumus + lembar acuan, tanpa tautan luar. */
   function toXlsx(visits, settings, now) {
-    return X.build([buildSheet(visits, settings, now)]);
+    var m = buildMasters(visits, settings);
+    return X.build([buildSheet(visits, settings, now)].concat(m.sheets), { names: m.names, recalc: true });
   }
 
   return {
     COLS: COLS, HEADERS: COLS.map(function (c) { return c.h; }), initials: initials, periodMonth: periodMonth,
-    diagnosisOf: diagnosisOf, medsOf: medsOf, buildRow: buildRow, buildSheet: buildSheet, toXlsx: toXlsx
+    diagnosisOf: diagnosisOf, medsOf: medsOf, buildRow: buildRow, buildSheet: buildSheet, buildMasters: buildMasters, cachedRow: cachedRow, toXlsx: toXlsx
   };
 });
