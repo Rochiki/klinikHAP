@@ -269,6 +269,15 @@
       Data kunjungan tersimpan. No. Surat Keterangan: <strong id="dlgSuratNo"></strong>
     </div>
     <div class="dlg-body email-grid" id="emailGrid"></div>
+    <details class="help">
+      <summary>Tidak terbuka di Outlook?</summary>
+      <ol>
+        <li><strong>Outlook Classic langsung:</strong> tombol <em>Buka di Outlook Classic</em> hanya muncul bila aplikasi dijalankan lewat <em>Jalankan-Klinik.bat</em> (Windows). Pastikan Outlook terpasang dan tidak dijalankan sebagai Administrator.</li>
+        <li><strong>Unduh .eml (paling andal):</strong> klik <em>Unduh .eml</em>, lalu klik berkas yang terunduh. Outlook classic membukanya sebagai email siap kirim. Bila yang terbuka bukan Outlook: klik kanan berkas &gt; <em>Open with</em> &gt; <em>Outlook</em> &gt; <em>Always</em>.</li>
+        <li><strong>Tombol mailto:</strong> Windows &gt; <em>Settings</em> &gt; <em>Apps</em> &gt; <em>Default apps</em> &gt; cari <em>MAILTO</em> &gt; pilih Outlook. Atau di Outlook: <em>File</em> &gt; <em>Options</em> &gt; <em>General</em> &gt; <em>Make Outlook the default program for Email, Contacts, and Calendar</em>. Bila Chrome menanyakan "Open Outlook?", pilih <em>Open</em> dan centang "Always allow".</li>
+        <li><strong>Cara darurat:</strong> <em>Salin Subjek</em> dan <em>Salin Isi</em>, lalu tempel (Ctrl+V) di email baru Outlook.</li>
+      </ol>
+    </details>
     <div class="dlg-foot">
       <p class="muted small" id="mailNote">Buka tiap email di Outlook, periksa, lalu tekan Kirim di Outlook.</p>
       <button type="button" class="btn primary" data-close>Selesai</button>
@@ -287,11 +296,12 @@
       <div class="field"><label>Isi email</label><textarea data-f="body" rows="17" spellcheck="false"></textarea></div>
       <p class="field-hint warn" data-f="hint" hidden></p>
       <div class="btn-row">
-        <button type="button" class="btn primary" data-action="mailto">Buka di Outlook (aplikasi)</button>
-        <button type="button" class="btn primary" data-action="outlook">Buka di Outlook Web</button>
+        <button type="button" class="btn primary" data-action="outlook-com" hidden>Buka di Outlook Classic</button>
+        <button type="button" class="btn primary" data-action="mailto">Buka di Outlook (mailto)</button>
         <button type="button" class="btn" data-action="copy-body">Salin Isi</button>
         <button type="button" class="btn" data-action="copy-subject">Salin Subjek</button>
         <button type="button" class="btn" data-action="eml">Unduh .eml (buka di Outlook)</button>
+        <button type="button" class="btn ghost" data-action="outlook">Outlook Web</button>
         <button type="button" class="btn" data-action="send" hidden>Kirim Langsung (SMTP)</button>
         <button type="button" class="btn ghost" data-action="mark">Tandai Sudah Terkirim</button>
       </div>

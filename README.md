@@ -18,7 +18,7 @@ menyiapkan **dua email** (pekerja dan atasan/HRD) yang **dibuka dulu di Outlook*
 | Email 1 (Pekerja) | Ringkasan kunjungan, dokter, rekomendasi, info Surat Keterangan telah diserahkan di klinik |
 | Email 2 (Atasan/HRD) | Nama, NIK, dept, jam masuk-keluar, status kerja, info surat. **Tanpa diagnosis, obat, maupun tujuan rujukan** |
 | Footer kedua email | `Punya keluhan atau saran pengembangan layanan? Silakan input melalui https://s.id/klinikHAP` |
-| Outlook | Per email: **Buka di Outlook (aplikasi)**, **Buka di Outlook Web**, atau **Unduh .eml** (terbuka di Outlook sebagai draf siap kirim) |
+| Outlook Classic | Per email: **Buka di Outlook Classic** (langsung, lewat `Jalankan-Klinik.bat`), **Unduh .eml** (terbuka di Outlook sebagai draf siap kirim), **mailto**, atau Outlook Web |
 | Riwayat | Pencarian, filter, ringkasan harian, detail, buka ulang draf email, hapus, unduh CSV |
 | Isi otomatis | NIK yang pernah tercatat mengisi nama/departemen/email otomatis |
 | Cadangan | Unduh/pulihkan data (.json) di menu Pengaturan |
@@ -30,8 +30,9 @@ menyiapkan **dua email** (pekerja dan atasan/HRD) yang **dibuka dulu di Outlook*
 2. Klik dua kali **`index.html`** (disarankan Chrome atau Edge).
 3. Buka menu **Pengaturan**: isi nama klinik, nama perawat, daftar dokter, dan dokter default. Simpan.
 
-> Pada cara ini, tombol Outlook memakai `mailto:` (Outlook aplikasi yang menjadi aplikasi email bawaan Windows)
-> atau Outlook Web. Alamat email tujuan harus diisi di form; bisa juga diubah langsung di draf.
+> Pada cara ini, email dibuka lewat **Unduh .eml** (paling andal: klik berkas yang terunduh, Outlook classic
+> membukanya sebagai draf siap kirim) atau tombol `mailto` (butuh Outlook diatur sebagai aplikasi email bawaan Windows).
+> Untuk membuka draf **langsung** di Outlook classic dengan satu klik, pakai Cara 2.
 
 ### Cara 2 - lewat server lokal (opsional)
 Butuh [Node.js](https://nodejs.org) 18 atau lebih baru.
@@ -42,7 +43,10 @@ npm start          # buka http://localhost:3000
 ```
 Windows: setelah `npm install`, cukup klik dua kali `Jalankan-Klinik.bat`.
 
-Server lokal hanya menyajikan berkas web dan, bila diaktifkan, tombol **Kirim Langsung (SMTP)**
+Di Windows dengan **Outlook classic** terpasang, server ini menambah tombol **Buka di Outlook Classic**: draf lengkap
+(penerima, CC, subjek, isi) langsung terbuka di Outlook desktop lewat PowerShell/COM, tanpa batas panjang `mailto`
+dan tanpa perlu mengatur aplikasi email bawaan. Outlook tidak boleh dijalankan sebagai Administrator.
+Server lokal juga menyediakan, bila diaktifkan, tombol **Kirim Langsung (SMTP)**
 yang mengirim tanpa lewat Outlook. Untuk mengaktifkannya: salin `server/.env.example` menjadi `server/.env`,
 isi SMTP perusahaan, lalu jalankan ulang. `server/.env` tidak ikut ke GitHub. Tanpa SMTP, tombol ini tersembunyi
 dan alur Outlook tetap berjalan. Untuk mencoba tanpa mengirim apa pun, isi `MAIL_DRY_RUN=1`.

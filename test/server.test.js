@@ -17,7 +17,8 @@ const post = (base, body, headers) => fetch(base + '/api/send', {
 test('tanpa SMTP: health menyatakan tidak bisa kirim, send -> 503', async () => {
   const { srv, base } = await listen(null);
   try {
-    assert.deepEqual(await (await fetch(base + '/api/health')).json(), { ok: true, canSend: false, dryRun: false });
+    const h = await (await fetch(base + '/api/health')).json();
+    assert.equal(h.canSend, false); assert.equal(h.dryRun, false);
     assert.equal((await post(base, good)).status, 503);
   } finally { srv.close(); }
 });
@@ -74,4 +75,32 @@ test('isi permintaan > 256 KB ditolak (413) atau koneksi diputus', async () => {
     });
     assert.ok(outcome === 413 || outcome === 'putus', 'hasil: ' + outcome);
   } finally { srv.close(); }
+});
+
+test('/api/outlook: memanggil pembuka Outlook dengan data bersih; tolak CSRF & input buruk; 501 bila tidak didukung', async () => {
+  const calls = [];
+  const srv1 = await new Promise((r) => { const s = createServer(null, { opener: async (m) => { calls.push(m); } }).listen(0, '127.0.0.1', () => r(s)); });
+  const base = 'http://127.0.0.1:' + srv1.address().port;
+  const post2 = (b, h) => fetch(base + '/api/outlook', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, h), body: JSON.stringify(b) });
+  try {
+    assert.equal((await (await fetch(base + '/api/health')).json()).canOutlook, true);
+    const r = await post2({ to: 'a@x.id, b@x.id', cc: 'c@x.id', subject: 'Uji', text: 'Isi \u2013 \"kutip\" $(rm) `x`' });
+    assert.equal(r.status, 200);
+    assert.deepEqual(calls[0], { to: 'a@x.id;b@x.id', cc: 'c@x.id', subject: 'Uji', text: 'Isi \u2013 \"kutip\" $(rm) `x`' });
+    assert.equal((await post2({ to: '', subject: 'Uji', text: 'Isi' })).status, 200);   // tujuan boleh kosong
+    assert.equal((await post2({ to: 'salah', subject: 'Uji', text: 'Isi' })).status, 400);
+    assert.equal((await post2({ to: 'a@x.id', subject: 'A\nB', text: 'Isi' })).status, 400);
+    assert.equal((await post2({ to: 'a@x.id', subject: 'Uji', text: 'Isi' }, { Origin: 'https://jahat.example' })).status, 403);
+  } finally { srv1.close(); }
+  const srv2 = await new Promise((r) => { const s = createServer(null, { opener: null }).listen(0, '127.0.0.1', () => r(s)); });
+  try {
+    const r = await fetch('http://127.0.0.1:' + srv2.address().port + '/api/outlook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    assert.equal(r.status, 501);
+  } finally { srv2.close(); }
+  const srv3 = await new Promise((r) => { const s = createServer(null, { opener: async () => { throw new Error('boom'); } }).listen(0, '127.0.0.1', () => r(s)); });
+  const origErr = console.error; console.error = () => {};
+  try {
+    const r = await fetch('http://127.0.0.1:' + srv3.address().port + '/api/outlook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: 'a@x.id', subject: 'U', text: 'I' }) });
+    assert.equal(r.status, 502);
+  } finally { console.error = origErr; srv3.close(); }
 });

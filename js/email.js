@@ -181,7 +181,7 @@
     var q = [];
     if (m.cc) q.push('cc=' + encodeURIComponent(m.cc));
     q.push('subject=' + encodeURIComponent(m.subject || ''));
-    q.push('body=' + encodeURIComponent(String(m.body || '').replace(/\r?\n/g, '\r\n')));
+    if (m.body) q.push('body=' + encodeURIComponent(String(m.body).replace(/\r?\n/g, '\r\n')));
     return 'mailto:' + encodeURIComponent(m.to || '').replace(/%2C/gi, ',').replace(/%40/g, '@') + '?' + q.join('&');
   }
 

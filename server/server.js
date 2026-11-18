@@ -50,6 +50,36 @@ function createTransport() {
   return null;
 }
 
+/* Membuka draf di Outlook classic (desktop) lewat COM PowerShell. Hanya Windows + Outlook classic.
+ * Data dikirim lewat stdin sebagai base64 (aman untuk karakter khusus; tidak ada interpolasi ke perintah). */
+const PS_SCRIPT = [
+  "$ErrorActionPreference = 'Stop'",
+  "$raw = [Console]::In.ReadToEnd().Trim()",
+  "$j = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($raw)) | ConvertFrom-Json",
+  "$ol = New-Object -ComObject Outlook.Application",
+  "$m = $ol.CreateItem(0)",
+  "$m.To = [string]$j.to; $m.CC = [string]$j.cc; $m.Subject = [string]$j.subject; $m.Body = [string]$j.text",
+  "$m.Display()"
+].join('\n');
+
+function openInOutlookClassic(mail) {
+  return new Promise((resolve, reject) => {
+    const { spawn } = require('node:child_process');
+    const enc = Buffer.from(PS_SCRIPT, 'utf16le').toString('base64');
+    const ps = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', enc],
+      { windowsHide: true, stdio: ['pipe', 'ignore', 'pipe'] });
+    let err = '';
+    const timer = setTimeout(() => { ps.kill(); reject(new Error('Outlook tidak merespons.')); }, 30000);
+    ps.stderr.on('data', (d) => { err += d; });
+    ps.on('error', (e) => { clearTimeout(timer); reject(e); });
+    ps.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve(); else reject(new Error(err.trim().split('\n')[0] || 'Outlook gagal dibuka (kode ' + code + ').'));
+    });
+    ps.stdin.end(Buffer.from(JSON.stringify(mail), 'utf8').toString('base64'));
+  });
+}
+
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg',
@@ -82,10 +112,11 @@ function readBody(req) {
 
 function parseList(s) { return String(s || '').split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean); }
 
-function validateMail(b) {
+function validateMail(b, opts) {
+  const requireTo = !opts || opts.requireTo !== false;
   if (!b || typeof b !== 'object') return 'Permintaan tidak valid.';
   const to = parseList(b.to), cc = parseList(b.cc);
-  if (!to.length) return 'Alamat tujuan wajib diisi.';
+  if (requireTo && !to.length) return 'Alamat tujuan wajib diisi.';
   if (to.length + cc.length > 10) return 'Terlalu banyak penerima.';
   for (const a of to.concat(cc)) {
     if (!EMAIL_RE.test(a)) return 'Alamat email tidak valid: ' + a;
@@ -98,16 +129,18 @@ function validateMail(b) {
   return null;
 }
 
-function createServer(mailer) {
+function createServer(mailer, opts) {
+  const opener = opts && 'opener' in opts ? opts.opener : (process.platform === 'win32' ? openInOutlookClassic : null);
   return http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost');
 
       if (url.pathname === '/api/health' && req.method === 'GET') {
-        return sendJson(res, 200, { ok: true, canSend: !!mailer, dryRun: !!mailer && mailer.mode === 'dry-run' });
+        return sendJson(res, 200, { ok: true, canSend: !!mailer, dryRun: !!mailer && mailer.mode === 'dry-run', canOutlook: !!opener });
       }
 
-      if (url.pathname === '/api/send') {
+      if (url.pathname === '/api/send' || url.pathname === '/api/outlook') {
+        const isOutlook = url.pathname === '/api/outlook';
         if (req.method !== 'POST') return sendJson(res, 405, { ok: false, error: 'Metode tidak diizinkan.' });
         // tolak permintaan dari situs lain (CSRF): Origin harus sama dengan Host
         const origin = req.headers.origin;
@@ -115,14 +148,24 @@ function createServer(mailer) {
           let oh = ''; try { oh = new URL(origin).host; } catch (e) { /* kosong */ }
           if (oh !== req.headers.host) return sendJson(res, 403, { ok: false, error: 'Asal permintaan ditolak.' });
         }
-        if (!mailer) return sendJson(res, 503, { ok: false, error: 'SMTP belum dikonfigurasi (lihat server/.env.example).' });
+        if (isOutlook && !opener) return sendJson(res, 501, { ok: false, error: 'Buka-langsung di Outlook hanya tersedia di Windows dengan Outlook classic.' });
+        if (!isOutlook && !mailer) return sendJson(res, 503, { ok: false, error: 'SMTP belum dikonfigurasi (lihat server/.env.example).' });
         if (!/^application\/json/i.test(req.headers['content-type'] || '')) return sendJson(res, 415, { ok: false, error: 'Content-Type harus application/json.' });
         let body;
         try { body = JSON.parse(await readBody(req)); } catch (e) {
           return sendJson(res, e.status || 400, { ok: false, error: e.status ? e.message : 'JSON tidak valid.' });
         }
-        const problem = validateMail(body);
+        const problem = validateMail(body, { requireTo: !isOutlook });
         if (problem) return sendJson(res, 400, { ok: false, error: problem });
+        if (isOutlook) {
+          try {
+            await opener({ to: parseList(body.to).join(';'), cc: parseList(body.cc).join(';'), subject: body.subject, text: body.text });
+            return sendJson(res, 200, { ok: true });
+          } catch (e) {
+            console.error('Gagal membuka Outlook:', e.message);
+            return sendJson(res, 502, { ok: false, error: 'Outlook classic tidak bisa dibuka otomatis. Pastikan Outlook terpasang dan tidak dijalankan sebagai Administrator. (' + String(e.message).slice(0, 120) + ')' });
+          }
+        }
         try {
           const info = await mailer.transport.sendMail({
             from: process.env.MAIL_FROM || process.env.SMTP_USER || 'klinik@localhost',
@@ -160,7 +203,7 @@ function createServer(mailer) {
   });
 }
 
-module.exports = { createServer, createTransport, validateMail };
+module.exports = { createServer, createTransport, validateMail, openInOutlookClassic };
 
 if (require.main === module) {
   const mailer = createTransport();

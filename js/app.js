@@ -8,7 +8,7 @@
 
   var state = {
     manualTime: false, pristine: true, saved: false,
-    canSend: false, dryRun: false, serverChecked: false,
+    canSend: false, dryRun: false, canOutlook: false, serverChecked: false,
     current: null, fromSubmit: false
   };
 
@@ -16,6 +16,7 @@
     { key: 'worker', title: 'Email 1 · Untuk Pekerja', label: 'Pekerja' },
     { key: 'boss', title: 'Email 2 · Untuk Atasan / HRD', label: 'Atasan' }
   ];
+  var MAILTO_MAX = 1800, OUTLOOK_WEB_MAX = 3500;
   var RECO_CLASS = { FIT: 'fit', SICK: 'sick', REFER: 'refer' };
 
   /* ---------- util DOM ---------- */
@@ -82,6 +83,7 @@
       ok ? resolve() : reject(new Error('copy gagal'));
     });
   }
+  function copyQuiet(t) { copyText(t).catch(function () { /* pengguna bisa pakai Salin Isi */ }); }
   function safeFile(s) { return String(s).replace(/[^A-Za-z0-9._-]+/g, '-'); }
 
   /* ---------- navigasi ---------- */
@@ -278,6 +280,7 @@
         input.closest('.field').querySelector('label').setAttribute('for', id);
       });
       $('[data-action="send"]', card).hidden = !state.canSend;
+      $('[data-action="outlook-com"]', card).hidden = !state.canOutlook;
       $('[data-f="to"]', card).addEventListener('input', function () { updateCard(card); });
       grid.appendChild(card);
       updateCard(card);
@@ -338,17 +341,43 @@
     var v = state.current;
     switch (btn.dataset.action) {
       case 'mailto':
-        var url = E.mailtoUrl(m);
-        if (url.length > 1900) toast('Email cukup panjang. Bila isi terpotong di aplikasi email, pakai Salin Isi atau Unduh .eml.');
+        // Windows menolak link mailto > ~2000 karakter; bila terlalu panjang, isi disalin ke clipboard
+        var url = E.mailtoUrl(m), long = url.length > MAILTO_MAX;
+        if (long) { url = E.mailtoUrl({ to: m.to, cc: m.cc, subject: m.subject, body: '' }); copyQuiet(m.body); }
         var a = el('a', { href: url }); document.body.appendChild(a); a.click(); a.remove();
         setOpened(role);
+        toast(long
+          ? 'Isi email panjang, jadi sudah DISALIN. Di Outlook klik badan email lalu tekan Ctrl+V.'
+          : 'Membuka Outlook... Bila tidak muncul, lihat "Tidak terbuka di Outlook?" di bawah.');
         break;
       case 'outlook':
-        var q = ['to=' + encodeURIComponent(m.to), 'subject=' + encodeURIComponent(m.subject),
-          'body=' + encodeURIComponent(m.body.replace(/\r?\n/g, '\r\n'))];
-        if (m.cc) q.splice(1, 0, 'cc=' + encodeURIComponent(m.cc));
-        window.open('https://outlook.office.com/mail/deeplink/compose?' + q.join('&'), '_blank', 'noopener');
+        var host = 'https://outlook.office.com/mail/deeplink/compose?';
+        var qs = function (withBody) {
+          var q = ['to=' + encodeURIComponent(m.to), 'subject=' + encodeURIComponent(m.subject)];
+          if (m.cc) q.splice(1, 0, 'cc=' + encodeURIComponent(m.cc));
+          if (withBody) q.push('body=' + encodeURIComponent(m.body.replace(/\r?\n/g, '\r\n')));
+          return q.join('&');
+        };
+        var web = host + qs(true), webLong = web.length > OUTLOOK_WEB_MAX;
+        if (webLong) { web = host + qs(false); copyQuiet(m.body); }
+        var w = window.open(web, '_blank', 'noopener');
         setOpened(role);
+        toast(w === null && !webLong && window.__calls === undefined
+          ? 'Jendela Outlook Web diblokir browser. Izinkan pop-up untuk halaman ini lalu klik lagi.'
+          : (webLong ? 'Isi email panjang, jadi sudah DISALIN. Di Outlook Web klik badan email lalu tekan Ctrl+V.'
+            : 'Membuka Outlook Web. Bila diminta, masuk dengan akun email kantor.'));
+        break;
+      case 'outlook-com':
+        btn.disabled = true;
+        fetch('api/outlook', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: m.to, cc: m.cc, subject: m.subject, text: m.body })
+        }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok && j.ok, j: j }; }); })
+          .then(function (res) {
+            if (res.ok) { setOpened(role); toast('Draf dibuka di Outlook. Periksa, lalu tekan Kirim di Outlook.'); }
+            else toast(res.j.error || 'Gagal membuka Outlook. Coba Unduh .eml.', true);
+          }).catch(function () { toast('Server lokal tidak dapat dihubungi. Coba Unduh .eml.', true); })
+          .then(function () { btn.disabled = false; });
         break;
       case 'copy-body':
         copyText(m.body).then(function () { toast('Isi email disalin.'); }, function () { toast('Gagal menyalin. Pilih teks lalu tekan Ctrl+C.', true); });
@@ -575,12 +604,13 @@
     if (!state.serverChecked) { box.textContent = ''; return; }
     if (state.canSend && state.dryRun) box.textContent = 'Server lokal aktif dalam MODE UJI: tombol Kirim Langsung tidak benar-benar mengirim email.';
     else if (state.canSend) box.textContent = 'Pengiriman email langsung (SMTP) aktif lewat server lokal.';
+    else if (state.canOutlook) box.textContent = 'Tombol "Buka di Outlook Classic" aktif: draf email dibuka langsung di Outlook desktop.';
     else box.textContent = 'Email dibuka dulu di Outlook (aplikasi atau Outlook Web) lalu dikirim dari sana. Kirim Langsung (SMTP) tidak aktif.';
   }
   function detectServer() {
     if (location.protocol === 'file:' || !window.fetch) { state.serverChecked = true; updateServerStatus(); return; }
     fetch('api/health', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
-      if (j && j.ok) { state.canSend = !!j.canSend; state.dryRun = !!j.dryRun; }
+      if (j && j.ok) { state.canSend = !!j.canSend; state.dryRun = !!j.dryRun; state.canOutlook = !!j.canOutlook; }
     }).catch(function () { /* hosting statis: tanpa server */ }).then(function () {
       state.serverChecked = true; updateServerStatus();
     });
