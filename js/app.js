@@ -118,6 +118,8 @@
     var r = currentReco();
     $('#restFields').hidden = r !== 'SICK';
     $('#referFields').hidden = r !== 'REFER';
+    $('#suratHint').textContent = r === 'SICK' ? 'Surat Keterangan Sakit akan diterbitkan dengan nomor otomatis saat disimpan.'
+      : (r ? 'Rekomendasi ini tidak menerbitkan surat sakit.' : '');
     updateRestPreview();
   }
   function updateRestPreview() {
@@ -237,9 +239,11 @@
     var settings = S.getSettings();
     var visit;
     try {
-      var seq = S.nextSeq(settings.suratPrefix, E.ymd(visitAt));
+      // surat keterangan hanya diterbitkan untuk istirahat sakit
+      var suratNo = '';
+      if (vals.recommendation === 'SICK') suratNo = E.buildSuratNo(settings.suratPrefix, visitAt, S.nextSeq(settings.suratPrefix, E.ymd(visitAt)));
       visit = {
-        suratNo: E.buildSuratNo(settings.suratPrefix, visitAt, seq),
+        suratNo: suratNo,
         createdAt: now.toISOString(), visitAt: visitAt.toISOString(), checkOutAt: outAt.toISOString(),
         name: vals.name, nik: vals.nik, dept: vals.dept,
         workerEmail: vals.workerEmail, supervisorName: vals.supervisorName,
@@ -285,8 +289,13 @@
       grid.appendChild(card);
       updateCard(card);
     });
-    $('#emailBanner').hidden = !fromSubmit;
-    $('#dlgSuratNo').textContent = visit.suratNo;
+    var banner = $('#emailBanner');
+    banner.textContent = '';
+    banner.appendChild(document.createTextNode(visit.suratNo
+      ? 'Data kunjungan tersimpan. No. Surat Keterangan Sakit: '
+      : 'Data kunjungan tersimpan. Tidak ada surat sakit untuk rekomendasi ini.'));
+    if (visit.suratNo) banner.appendChild(el('strong', { id: 'dlgSuratNo', text: visit.suratNo }));
+    banner.hidden = !fromSubmit;
     $('#emailDlgSub').textContent = visit.name + ' (' + visit.nik + ') · ' + E.fmtDate(new Date(visit.visitAt));
     $('#mailNote').textContent = fromSubmit
       ? 'Buka tiap email di Outlook, periksa, lalu tekan Kirim di Outlook. Draf dapat dibuka lagi dari menu Riwayat.'
@@ -386,7 +395,7 @@
         copyText(m.subject).then(function () { toast('Subjek disalin.'); }, function () { toast('Gagal menyalin.', true); });
         break;
       case 'eml':
-        download('email-' + (role === 'worker' ? 'pekerja' : 'atasan') + '-' + safeFile(v.suratNo) + '.eml', E.toEml(m), 'message/rfc822');
+        download('email-' + (role === 'worker' ? 'pekerja' : 'atasan') + '-' + safeFile(v.suratNo || (E.ymd(new Date(v.visitAt)) + '-' + v.nik)) + '.eml', E.toEml(m), 'message/rfc822');
         setOpened(role);
         toast('File .eml diunduh. Klik dua kali, Outlook membukanya sebagai draf siap kirim.');
         break;
@@ -470,7 +479,7 @@
       var d = new Date(v.visitAt);
       var tr = el('tr', { 'data-id': v.id }, [
         el('td', {}, [E.fmtDateShort(d), el('small', { text: E.fmtTime(d) + (v.checkOutAt ? ' - ' + E.fmtTime(new Date(v.checkOutAt)) : '') })]),
-        el('td', { class: 'small', text: v.suratNo }),
+        el('td', { class: 'small', text: v.suratNo || '-' }),
         el('td', {}, [el('strong', { text: v.name }), el('small', { text: 'NIK ' + v.nik })]),
         el('td', { text: v.dept }),
         el('td', {}, [recoBadge(v)]),
@@ -497,7 +506,7 @@
     if (btn.dataset.act === 'detail') openDetail(v);
     else if (btn.dataset.act === 'emails') openEmailDialog(v, false);
     else if (btn.dataset.act === 'delete') {
-      if (window.confirm('Hapus kunjungan ' + v.name + ' (' + v.suratNo + ')?\nTindakan ini tidak dapat dibatalkan.')) {
+      if (window.confirm('Hapus kunjungan ' + v.name + ' (' + (v.suratNo || E.fmtDateShort(new Date(v.visitAt))) + ')?\nTindakan ini tidak dapat dibatalkan.')) {
         S.deleteVisit(id); refreshLists(); renderHistory(); toast('Kunjungan dihapus.');
       }
     }
@@ -508,7 +517,7 @@
     body.textContent = '';
     var d = new Date(v.visitAt);
     var rows = [
-      ['No. Surat', v.suratNo],
+      ['No. Surat Sakit', v.suratNo || '-'],
       ['Tanggal', E.fmtDate(d)],
       ['Jam masuk - keluar', E.fmtTime(d) + (v.checkOutAt ? ' - ' + E.fmtTime(new Date(v.checkOutAt)) : '')],
       ['Nama', v.name], ['NIK', v.nik], ['Departemen', v.dept],
@@ -562,6 +571,8 @@
     var s = S.getSettings(), f = $('#settingsForm');
     f.elements.clinicName.value = s.clinicName;
     f.elements.nurseName.value = s.nurseName;
+    f.elements.nurseTitle.value = s.nurseTitle;
+    f.elements.companyName.value = s.companyName;
     f.elements.doctors.value = s.doctors.join('\n');
     f.elements.defaultDoctor.value = s.defaultDoctor;
     f.elements.suratPrefix.value = s.suratPrefix;
@@ -589,6 +600,8 @@
     S.saveSettings({
       clinicName: f.elements.clinicName.value.trim() || 'Klinik HAP',
       nurseName: f.elements.nurseName.value.trim(),
+      nurseTitle: f.elements.nurseTitle.value.trim(),
+      companyName: f.elements.companyName.value.trim(),
       doctors: doctors, defaultDoctor: def || doctors[0] || '',
       suratPrefix: prefix, ccAlways: E.splitEmails(cc).join(', '),
       departments: linesOf(f.elements.departments.value)

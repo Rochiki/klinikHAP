@@ -46,7 +46,7 @@ test('email pekerja memuat ringkasan, dokter, status, no. surat', () => {
   assert.match(b, /- Vitamin C 1x1/);
   assert.match(b, /Istirahat Sakit \/ Sick Leave/);
   assert.match(b, /2 hari \(18 November 2026 s\.d\. 19 November 2026\)/);
-  assert.match(b, /No\. SK\/KLL\/20261118\/001 telah diserahkan langsung kepada Anda di klinik/);
+  assert.match(b, /Surat Keterangan Sakit dengan No\. SK\/KLL\/20261118\/001 telah diserahkan langsung kepada Anda di klinik/);
 });
 
 test('email atasan TIDAK membocorkan diagnosis, obat, atau tujuan rujukan', () => {
@@ -60,7 +60,7 @@ test('email atasan TIDAK membocorkan diagnosis, obat, atau tujuan rujukan', () =
   assert.match(b, /Departemen: Service/);
   assert.match(b, /Jam masuk - keluar: 09:16 - 09:42/);
   assert.match(b, /Rujukan Lanjutan/);
-  assert.match(b, /telah diserahkan langsung kepada yang bersangkutan/);
+  assert.ok(!/Surat Keterangan|SK\/KLL/.test(b), 'rujukan tidak menerbitkan surat sakit');
 });
 
 test('email atasan memuat durasi istirahat tetapi tanpa diagnosis', () => {
@@ -124,4 +124,30 @@ test('.eml: header benar, subjek non-ASCII ter-encode, isi dapat didekode kembal
   const subj = head.match(/Subject: ([\s\S]*?)\r\nMIME/)[1].split('\r\n ').map((w) =>
     Buffer.from(w.replace(/^=\?UTF-8\?B\?/, '').replace(/\?=$/, ''), 'base64').toString('utf8')).join('');
   assert.equal(subj, 'Ringkasan – Kunjungan Klinik HAP – 18 November 2026');
+});
+
+test('surat sakit HANYA untuk istirahat sakit: fit to work & rujukan tanpa surat/nomor', () => {
+  const sick = E.buildEmails(visit(), settings);
+  assert.match(sick.boss.body, /Surat Keterangan Sakit dengan No\. SK\/KLL\/20261118\/001 telah diserahkan langsung kepada karyawan/);
+  assert.match(sick.worker.subject, /\(No\. SK\/KLL\/20261118\/001\)/);
+  for (const rec of ['FIT', 'REFER']) {
+    const m = E.buildEmails(visit({ recommendation: rec, restDays: 0, suratNo: '' }), settings);
+    for (const k of ['worker', 'boss']) {
+      assert.ok(!/Surat Keterangan|SK\/KLL|surat sakit diterbitkan/.test(m[k].body), rec + ' ' + k + ' memuat surat');
+      assert.ok(!/\(No\./.test(m[k].subject), rec + ' ' + k + ' subjek memuat nomor');
+      assert.ok(m[k].body.endsWith(FOOTER));
+    }
+  }
+  const fit = E.buildEmails(visit({ recommendation: 'FIT', restDays: 0, suratNo: '' }), settings);
+  assert.match(fit.boss.body, /Tidak ada surat keterangan sakit yang diterbitkan/);
+});
+
+test('tanda tangan: Best Regards + nama + jabatan + perusahaan (bawaan & dapat diganti)', () => {
+  const def = E.buildEmails(visit({ nurse: '' }), {});
+  const sig = 'Best Regards,\nEny Rohmatul Fitri\nPerawat Perusahaan\nPT Hexindo Adiperkasa Tbk\n\n--\n' + FOOTER;
+  assert.ok(def.worker.body.endsWith(sig), 'email pekerja');
+  assert.ok(def.boss.body.endsWith(sig), 'email atasan');
+  assert.ok(!/Salam sehat|Hormat kami/.test(def.worker.body + def.boss.body));
+  const custom = E.buildEmails(visit({ nurse: 'Ns. Lain' }), { nurseTitle: 'Perawat', companyName: 'PT X' });
+  assert.match(custom.boss.body, /Best Regards,\nNs\. Lain\nPerawat\nPT X\n/);
 });

@@ -15,6 +15,10 @@
     'September', 'Oktober', 'November', 'Desember'];
   var DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
+  var DEFAULT_SIGNATURE = {
+    name: 'Eny Rohmatul Fitri', title: 'Perawat Perusahaan', company: 'PT Hexindo Adiperkasa Tbk'
+  };
+
   var RECOMMENDATIONS = {
     FIT: { label: 'Kembali Bekerja (Fit to Work)', short: 'Fit to Work' },
     SICK: { label: 'Istirahat Sakit / Sick Leave', short: 'Istirahat Sakit' },
@@ -88,10 +92,12 @@
     var rec = RECOMMENDATIONS[v.recommendation] || { label: '-', short: '-' };
     var range = restRange(v);
     var timeRange = fmtTime(visitAt) + (outAt ? ' - ' + fmtTime(outAt) : '');
-    var signer = (v.nurse || settings.nurseName || 'Petugas Klinik');
+    var signer = (v.nurse || settings.nurseName || DEFAULT_SIGNATURE.name);
+    var title = settings.nurseTitle || DEFAULT_SIGNATURE.title;
+    var company = settings.companyName || DEFAULT_SIGNATURE.company;
+    var signature = ['Best Regards,', signer, title, company];
     var cc = splitEmails(settings.ccAlways);
-    var suratLine = 'Surat Keterangan resmi dengan No. ' + v.suratNo +
-      ' telah diserahkan langsung kepada yang bersangkutan di klinik.';
+    var hasSurat = v.recommendation === 'SICK' && !!v.suratNo; // surat hanya untuk istirahat sakit
 
     /* --- Email 1: pekerja --- */
     var w = [];
@@ -110,10 +116,12 @@
     if (range) w.push('Durasi istirahat: ' + restText(range));
     if (v.recommendation === 'REFER' && v.referralTo) w.push('Tujuan rujukan: ' + v.referralTo);
     w.push('');
-    w.push('Surat Keterangan resmi dengan No. ' + v.suratNo +
-      ' telah diserahkan langsung kepada Anda di klinik. Mohon disimpan dan ' +
-      'diserahkan kepada atasan/HRD sesuai ketentuan perusahaan bila diperlukan.');
-    w.push('');
+    if (hasSurat) {
+      w.push('Surat Keterangan Sakit dengan No. ' + v.suratNo +
+        ' telah diserahkan langsung kepada Anda di klinik. Mohon disimpan dan ' +
+        'diserahkan kepada atasan/HRD sesuai ketentuan perusahaan.');
+      w.push('');
+    }
     if (v.recommendation === 'FIT') {
       w.push('Anda dinyatakan layak kembali bekerja. Bila keluhan muncul kembali atau memburuk, segera kembali ke klinik.');
     } else if (v.recommendation === 'SICK') {
@@ -122,9 +130,7 @@
       w.push('Mohon segera menindaklanjuti rujukan ke fasilitas kesehatan lanjutan dan membawa surat yang telah diberikan.');
     }
     w.push('');
-    w.push('Salam sehat,');
-    w.push(signer);
-    w.push(clinic);
+    signature.forEach(function (l) { w.push(l); });
     w.push('');
     w.push('--');
     w.push(FEEDBACK_LINE);
@@ -144,17 +150,21 @@
     b.push('Status rekomendasi kerja: ' + rec.label);
     if (range) b.push('Durasi istirahat: ' + restText(range));
     b.push('');
-    b.push(suratLine + ' Mohon karyawan yang bersangkutan dapat menunjukkan surat tersebut sesuai ketentuan perusahaan.');
-    b.push('');
+    if (hasSurat) {
+      b.push('Surat Keterangan Sakit dengan No. ' + v.suratNo +
+        ' telah diserahkan langsung kepada karyawan yang bersangkutan di klinik. Mohon karyawan dapat menunjukkan surat tersebut sesuai ketentuan perusahaan.');
+      b.push('');
+    } else if (v.recommendation === 'FIT') {
+      b.push('Karyawan dinyatakan layak kembali bekerja. Tidak ada surat keterangan sakit yang diterbitkan.');
+      b.push('');
+    }
     if (v.recommendation === 'REFER') {
       b.push('Karyawan direkomendasikan menjalani pemeriksaan lanjutan di fasilitas kesehatan rujukan.');
       b.push('');
     }
     b.push('Informasi ini hanya memuat status kerja. Rincian medis bersifat rahasia dan tidak disampaikan melalui email ini.');
     b.push('');
-    b.push('Hormat kami,');
-    b.push(signer);
-    b.push(clinic);
+    signature.forEach(function (l) { b.push(l); });
     b.push('');
     b.push('--');
     b.push(FEEDBACK_LINE);
@@ -164,7 +174,7 @@
       worker: {
         to: v.workerEmail || '',
         cc: cc.join(', '),
-        subject: 'Ringkasan Kunjungan ' + clinic + ' - ' + fmtDateShort(visitAt) + ' (No. ' + v.suratNo + ')',
+        subject: 'Ringkasan Kunjungan ' + clinic + ' - ' + fmtDateShort(visitAt) + (hasSurat ? ' (No. ' + v.suratNo + ')' : ''),
         body: w.join('\n')
       },
       boss: {
@@ -213,7 +223,7 @@
   }
 
   return {
-    FEEDBACK_LINE: FEEDBACK_LINE,
+    FEEDBACK_LINE: FEEDBACK_LINE, DEFAULT_SIGNATURE: DEFAULT_SIGNATURE,
     RECOMMENDATIONS: RECOMMENDATIONS,
     pad: pad, ymd: ymd, fmtDate: fmtDate, fmtDateShort: fmtDateShort, fmtTime: fmtTime,
     parseYmd: parseYmd, restRange: restRange, restText: restText,

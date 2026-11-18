@@ -133,6 +133,7 @@
             </label>
           </div>
           <p class="field-error" data-error-for="recommendation" role="alert"></p>
+          <p class="field-hint" id="suratHint"></p>
 
           <div id="restFields" class="row-3" hidden>
             <div class="field">
@@ -188,7 +189,7 @@
           <table class="tbl">
             <thead>
               <tr>
-                <th>Waktu</th><th>No. Surat</th><th>Pekerja</th><th>Departemen</th>
+                <th>Waktu</th><th>No. Surat Sakit</th><th>Pekerja</th><th>Departemen</th>
                 <th>Rekomendasi</th><th>Email</th><th class="right">Aksi</th>
               </tr>
             </thead>
@@ -209,8 +210,16 @@
             <input id="s-clinicName" name="clinicName" type="text" maxlength="80">
           </div>
           <div class="field">
-            <label for="s-nurseName">Nama perawat / petugas (tanda tangan email)</label>
+            <label for="s-nurseName">Nama perawat (tanda tangan email)</label>
             <input id="s-nurseName" name="nurseName" type="text" maxlength="80">
+          </div>
+          <div class="field">
+            <label for="s-nurseTitle">Jabatan (tanda tangan email)</label>
+            <input id="s-nurseTitle" name="nurseTitle" type="text" maxlength="80">
+          </div>
+          <div class="field">
+            <label for="s-companyName">Nama perusahaan (tanda tangan email)</label>
+            <input id="s-companyName" name="companyName" type="text" maxlength="100">
           </div>
           <div class="field">
             <label for="s-doctors">Daftar dokter pemeriksa <span class="opt">(satu per baris)</span></label>
@@ -221,7 +230,7 @@
             <input id="s-defaultDoctor" name="defaultDoctor" type="text" maxlength="120">
           </div>
           <div class="field">
-            <label for="s-suratPrefix">Awalan nomor surat</label>
+            <label for="s-suratPrefix">Awalan nomor surat sakit</label>
             <input id="s-suratPrefix" name="suratPrefix" type="text" maxlength="30">
             <p class="field-hint">Contoh hasil: <strong id="suratExample"></strong></p>
             <p class="field-error" data-error-for="suratPrefix" role="alert"></p>
@@ -265,9 +274,7 @@
       </div>
       <button type="button" class="icon-btn" data-close aria-label="Tutup">&times;</button>
     </div>
-    <div class="dlg-banner" id="emailBanner" hidden>
-      Data kunjungan tersimpan. No. Surat Keterangan: <strong id="dlgSuratNo"></strong>
-    </div>
+    <div class="dlg-banner" id="emailBanner" hidden></div>
     <div class="dlg-body email-grid" id="emailGrid"></div>
     <details class="help">
       <summary>Tidak terbuka di Outlook?</summary>

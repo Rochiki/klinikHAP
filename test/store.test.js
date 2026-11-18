@@ -65,5 +65,16 @@ test('hapus semua data', () => {
   const s = fresh();
   s.addVisit(v('1')); s.saveSettings({ nurseName: 'X' }); s.clearAll();
   assert.equal(s.listVisits().length, 0);
-  assert.equal(s.getSettings().nurseName, '');
+  assert.equal(s.getSettings().nurseName, 'Eny Rohmatul Fitri');
+});
+
+test('pengaturan: tanda tangan bawaan tidak boleh kosong', () => {
+  const s = fresh();
+  assert.equal(s.getSettings().nurseName, 'Eny Rohmatul Fitri');
+  assert.equal(s.getSettings().nurseTitle, 'Perawat Perusahaan');
+  assert.equal(s.getSettings().companyName, 'PT Hexindo Adiperkasa Tbk');
+  s.saveSettings({ nurseName: '   ', nurseTitle: '' });
+  assert.equal(s.getSettings().nurseName, 'Eny Rohmatul Fitri');
+  s.saveSettings({ nurseName: 'Ns. Lain' });
+  assert.equal(s.getSettings().nurseName, 'Ns. Lain');
 });

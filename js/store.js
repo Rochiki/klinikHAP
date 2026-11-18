@@ -12,7 +12,9 @@
 
   var DEFAULT_SETTINGS = {
     clinicName: 'Klinik HAP',
-    nurseName: '',
+    nurseName: 'Eny Rohmatul Fitri',
+    nurseTitle: 'Perawat Perusahaan',
+    companyName: 'PT Hexindo Adiperkasa Tbk',
     doctors: [],
     defaultDoctor: '',
     suratPrefix: 'SK/KLL',
@@ -51,6 +53,7 @@
     /* ---- pengaturan ---- */
     function getSettings() {
       var s = Object.assign({}, DEFAULT_SETTINGS, read('settings', {}));
+      ['nurseName', 'nurseTitle', 'companyName'].forEach(function (k) { if (!String(s[k] || '').trim()) s[k] = DEFAULT_SETTINGS[k]; });
       s.doctors = Array.isArray(s.doctors) ? s.doctors : [];
       s.departments = Array.isArray(s.departments) ? s.departments : DEFAULT_SETTINGS.departments.slice();
       return s;

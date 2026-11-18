@@ -13,10 +13,11 @@ menyiapkan **dua email** (pekerja dan atasan/HRD) yang **dibuka dulu di Outlook*
 |---|---|
 | Form kunjungan | NIK, nama, departemen, keluhan/diagnosa, obat, dokter pemeriksa, rekomendasi (Fit to Work / Istirahat Sakit / Rujukan), durasi istirahat |
 | Waktu otomatis | Jam masuk terisi saat form mulai diisi, jam keluar saat disimpan; bisa diubah manual (centang "Ubah waktu secara manual") |
-| No. surat otomatis | `SK/KLL/YYYYMMDD/XXX` (urut per hari; awalan dapat diubah di Pengaturan) |
+| Surat Keterangan Sakit | Hanya untuk **Istirahat Sakit**: nomor otomatis `SK/KLL/YYYYMMDD/XXX` (urut per hari; awalan dapat diubah). Fit to Work dan Rujukan tidak menerbitkan surat sakit |
 | **Simpan & Kirim Notifikasi** | Menyimpan ke riwayat lalu menampilkan 2 draf email yang bisa disunting |
-| Email 1 (Pekerja) | Ringkasan kunjungan, dokter, rekomendasi, info Surat Keterangan telah diserahkan di klinik |
+| Email 1 (Pekerja) | Ringkasan kunjungan, dokter, rekomendasi; untuk istirahat sakit, info Surat Keterangan Sakit telah diserahkan di klinik |
 | Email 2 (Atasan/HRD) | Nama, NIK, dept, jam masuk-keluar, status kerja, info surat. **Tanpa diagnosis, obat, maupun tujuan rujukan** |
+| Tanda tangan | `Best Regards, Eny Rohmatul Fitri, Perawat Perusahaan, PT Hexindo Adiperkasa Tbk` (dapat diubah di Pengaturan) |
 | Footer kedua email | `Punya keluhan atau saran pengembangan layanan? Silakan input melalui https://s.id/klinikHAP` |
 | Outlook Classic | Per email: **Buka di Outlook Classic** (langsung, lewat `Jalankan-Klinik.bat`), **Unduh .eml** (terbuka di Outlook sebagai draf siap kirim), **mailto**, atau Outlook Web |
 | Riwayat | Pencarian, filter, ringkasan harian, detail, buka ulang draf email, hapus, unduh CSV |
@@ -86,7 +87,7 @@ test/                 tes otomatis (npm test)
 - Email atasan/HRD sengaja tidak memuat diagnosis, obat, atau tujuan rujukan. Periksa tetap draf sebelum mengirim.
 - Email ke pekerja memuat diagnosis dan obat. Pastikan alamat tujuan benar (kolom Kepada dapat disunting).
 - Unduh **cadangan** berkala; menghapus data browser akan menghapus riwayat. Simpan berkas cadangan di tempat aman.
-- Nomor surat dihitung per laptop. Bila dipakai di lebih dari satu laptop, awalan nomor sebaiknya dibedakan
+- Nomor surat sakit dihitung per laptop. Bila dipakai di lebih dari satu laptop, awalan nomor sebaiknya dibedakan
   (misal `SK/KLL1`, `SK/KLL2`) agar tidak terjadi nomor kembar.
 - Pemrosesan data kesehatan karyawan tunduk pada UU PDP; sesuaikan dengan kebijakan perusahaan.
 
