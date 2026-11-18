@@ -803,8 +803,26 @@
     var m = /^#v=(.+)$/.exec(location.hash || '');
     if (!m) return;
     showView('history');
-    $('#vNo').value = '#v=' + m[1].replace(/^#?v=/, '');
+    var raw = m[1];
+    $('#vNo').value = '#v=' + raw.replace(/^#?v=/, '');
     runVerify();
+    // Ponsel yang memindai QR tidak punya catatan klinik: tampilkan data pada QR (hanya baca) dan arahkan pencocokan.
+    var out = $('#vResult');
+    if (/TIDAK DITEMUKAN/.test(out.textContent)) {
+      var q = {}, parts = raw.split('&');
+      var head = parts.shift().split('|');
+      parts.forEach(function (kv) { var i = kv.indexOf('='); if (i > 0) q[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); });
+      var no = decodeURIComponent(head[0] || ''), code = head[1] || '';
+      var when = q.t ? new Date(q.t) : null;
+      var ok = no && /^[0-9A-F]{4}-[0-9A-F]{4}$/i.test(code);
+      out.className = 'verify-result' + (ok ? ' ok' : ' bad');
+      out.textContent = ok
+        ? 'DATA PADA QR: surat ' + no + ', kode ' + code.toUpperCase() + (q.dr ? ', dokter ' + q.dr : '') +
+          (when && !isNaN(when) ? ', terbit ' + when.toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) : '') +
+          (q.n ? ', istirahat ' + q.n + ' hari' : '') +
+          '. Cocokkan nomor dan kode ini dengan surat dan catatan Pelayanan Kesehatan (keaslian penuh diperiksa di laptop klinik).'
+        : 'QR tidak berisi data verifikasi yang valid.';
+    }
   }
 
   /* ---------- pengaturan ---------- */

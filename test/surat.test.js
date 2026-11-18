@@ -39,11 +39,14 @@ test('PDF surat: valid, memuat kop/nomor/dokter, TANPA diagnosis', () => {
   assert.equal(r.filename, 'Surat-Sakit-007-SKS-QSHE-HAP-XI-2026.pdf');
 });
 
-test('QR: tautan verifikasi bila diisi, teks ringkas bila tidak', () => {
+test('QR: tautan verifikasi (bawaan atau dari Pengaturan), teks ringkas hanya bila diisi "-"', () => {
   const code = S.verifyCode(visit, 'x');
-  assert.match(S.qrPayload(visit, {}, code), /^HEXINDO - SURAT KETERANGAN SAKIT\nNo: 007\/SKS\/QSHE-HAP\/XI\/2026\n/);
-  assert.equal(S.qrPayload(visit, { verifyUrl: 'https://x.id/app/#abc' }, code), 'https://x.id/app/#v=007%2FSKS%2FQSHE-HAP%2FXI%2F2026|' + code);
-  assert.ok(!/Faringitis/.test(S.qrPayload(visit, {}, code)));
+  const def = S.qrPayload(visit, {}, code);
+  assert.match(def, /^https:\/\/rochiki\.github\.io\/klinikHAP\/#v=007%2FSKS%2FQSHE-HAP%2FXI%2F2026\|/);
+  assert.match(def, /&dr=/);
+  assert.match(S.qrPayload(visit, { verifyUrl: 'https://x.id/app/#abc' }, code), /^https:\/\/x\.id\/app\/#v=007%2FSKS%2FQSHE-HAP%2FXI%2F2026\|/);
+  assert.match(S.qrPayload(visit, { verifyUrl: '-' }, code), /^HEXINDO - SURAT KETERANGAN SAKIT\nNo: 007\/SKS\/QSHE-HAP\/XI\/2026\n/);
+  ['Faringitis', visit.name, visit.nik].forEach(x => assert.ok(!def.includes(encodeURIComponent(x || '#none')) && !def.includes(x || '#none')));
 });
 
 test('surat hanya untuk istirahat sakit bernomor; versi English', () => {

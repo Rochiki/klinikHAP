@@ -60,11 +60,23 @@
     return h.slice(0, 4) + '-' + h.slice(4);
   }
 
-  /** Isi QR: tautan verifikasi (bila diisi) atau teks ringkas yang terbaca di ponsel tanpa internet. */
+  var DEFAULT_VERIFY_URL = 'https://rochiki.github.io/klinikHAP/';
+
+  /**
+   * Isi QR: tautan verifikasi (bawaan: halaman klinikHAP di GitHub Pages) agar kamera ponsel membuka halaman,
+   * bukan mencari teks di mesin pencari. Fragmen (#) hanya memuat data minimal: nomor, kode, dokter,
+   * waktu terbit, lama istirahat. TANPA nama, NIK, atau diagnosis. Isi '-' di Pengaturan untuk QR teks biasa.
+   */
   function qrPayload(v, settings, code) {
     var r = E.restRange(v);
     var base = String(settings.verifyUrl || '').trim();
-    if (base) return base.replace(/#.*$/, '') + '#v=' + encodeURIComponent(v.suratNo) + '|' + code;
+    if (base !== '-') {
+      base = (base || DEFAULT_VERIFY_URL).replace(/#.*$/, '');
+      return base + '#v=' + encodeURIComponent(v.suratNo) + '|' + code +
+        '&dr=' + encodeURIComponent(ascii(v.doctor)) +
+        '&t=' + encodeURIComponent(v.visitAt ? new Date(v.visitAt).toISOString() : '') +
+        '&n=' + (r ? r.days : '');
+    }
     return ['HEXINDO - SURAT KETERANGAN SAKIT', 'No: ' + v.suratNo, 'Nama: ' + ascii(v.name), 'NIK: ' + (v.nik || '-'),
       'Istirahat: ' + (r ? r.days + ' hari ' + E.ymd(r.start) + '-' + E.ymd(r.end) : '-'),
       'Dokter: ' + ascii(v.doctor), 'Kode: ' + code].join('\n');
