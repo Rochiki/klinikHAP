@@ -257,3 +257,11 @@ details.help li { margin: .35rem 0; }
 dialog#signDialog { width: min(680px, 96vw); }
 #signPad { width: 100%; height: auto; aspect-ratio: 600 / 220; background: #fff; border: 2px dashed #b9c0ca; border-radius: 10px; touch-action: none; cursor: crosshair; display: block; }
 .check { display: flex; gap: .5rem; align-items: center; margin-top: .7rem; font-size: .93rem; }
+
+.install-bar { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; padding: .7rem 1.25rem; background: #fff3e6; border-bottom: 3px solid var(--orange); color: #3a2a1a; }
+.install-bar[hidden] { display: none; }
+.install-bar .install-text { flex: 1 1 18rem; font-size: 1rem; }
+.install-bar .btn.primary { font-size: 1.05rem; padding: .6rem 1.4rem; }
+dialog#installDialog { max-width: 34rem; border: 0; border-radius: 12px; padding: 1.25rem 1.5rem; }
+dialog#installDialog::backdrop { background: rgba(0, 0, 0, .45); }
+dialog#installDialog li { margin-bottom: .5rem; line-height: 1.45; }

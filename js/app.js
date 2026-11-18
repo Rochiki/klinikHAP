@@ -710,6 +710,29 @@
   }
 
   /* Selesai (tanpa server lokal): buka kedua email berurutan lewat mailto dengan isi terisi */
+  var installEvt = null;
+  function initInstall() {
+    var bar = $('#installBar');
+    var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone;
+    var dismissed = false;
+    try { dismissed = localStorage.getItem('klinikhap.installDismissed') === '1'; } catch (e) { /* abaikan */ }
+    if (standalone || dismissed || !/^https?:$/.test(location.protocol)) return;
+    bar.hidden = false; // selalu tampil sampai dipasang atau ditutup
+    window.addEventListener('beforeinstallprompt', function (ev) { ev.preventDefault(); installEvt = ev; });
+    window.addEventListener('appinstalled', function () { bar.hidden = true; toast('Aplikasi terpasang.'); });
+    $('#btnInstall').addEventListener('click', function () {
+      if (installEvt) {
+        installEvt.prompt();
+        installEvt.userChoice.then(function (c) { if (c && c.outcome === 'accepted') bar.hidden = true; installEvt = null; });
+      } else $('#installDialog').showModal();
+    });
+    $('#btnInstallClose').addEventListener('click', function () { $('#installDialog').close(); });
+    $('#btnInstallLater').addEventListener('click', function () {
+      bar.hidden = true;
+      try { localStorage.setItem('klinikhap.installDismissed', '1'); } catch (e) { /* abaikan */ }
+    });
+  }
+
   function finishViaMailto() {
     var v = state.current;
     var todo = $$('#emailGrid .email-card').filter(function (c) {
@@ -1142,6 +1165,7 @@
     if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) { // agar bisa dipasang sebagai aplikasi & jalan tanpa internet
       navigator.serviceWorker.register('sw.js').catch(function () { /* tidak wajib */ });
     }
+    initInstall();
     $('#btnVerify').addEventListener('click', runVerify);
     $('#vCode').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') runVerify(); });
     $('#s-logo').addEventListener('change', onLogoFile);

@@ -26,6 +26,22 @@
     <div class="clock" id="clock" aria-hidden="true"></div>
   </header>
 
+  <div id="installBar" class="install-bar" hidden>
+    <span class="install-text"><strong>Pasang Klinik HAP sebagai aplikasi</strong> &mdash; ikon di desktop, terbuka tanpa kolom alamat.</span>
+    <button type="button" class="btn primary" id="btnInstall">Pasang Aplikasi</button>
+    <button type="button" class="btn ghost" id="btnInstallLater">Nanti</button>
+  </div>
+  <dialog id="installDialog">
+    <h3>Cara memasang aplikasi</h3>
+    <ol id="installSteps">
+      <li>Pastikan alamatnya <strong>https://rochiki.github.io/klinikHAP/</strong> (bukan file di komputer).</li>
+      <li>Klik menu <strong>titik tiga &#8942;</strong> di pojok kanan atas Chrome/Edge.</li>
+      <li>Pilih <strong>Transmisi, simpan, dan bagikan</strong> &rarr; <strong>Instal halaman sebagai aplikasi</strong> (di Edge: <strong>Aplikasi</strong> &rarr; <strong>Instal situs ini sebagai aplikasi</strong>).</li>
+      <li>Di HP Android: menu &#8942; &rarr; <strong>Tambahkan ke layar utama</strong> / <strong>Instal aplikasi</strong>.</li>
+    </ol>
+    <div class="btn-row"><button type="button" class="btn primary" id="btnInstallClose">Mengerti</button></div>
+  </dialog>
+
   <div id="storageWarning" class="banner banner-warn" hidden>
     Penyimpanan browser tidak tersedia (mode privat/diblokir). Data hanya bertahan selama halaman ini terbuka.
     Gunakan jendela biasa atau unduh cadangan di menu Pengaturan.
